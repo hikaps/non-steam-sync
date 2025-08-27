@@ -33,6 +33,11 @@ public class PluginSettings : ISettings
         return errors.Count == 0;
     }
 
+    public PluginSettings()
+    {
+        // Parameterless constructor required for JSON deserialization
+    }
+
     public PluginSettings(Plugin plugin)
     {
         _plugin = plugin;
@@ -138,7 +143,10 @@ public class ShortcutsLibrary : LibraryPlugin
         try
         {
             // Listen for game updates to sync back changes
-            PlayniteApi?.Database?.Games.ItemUpdated += Games_ItemUpdated;
+            if (PlayniteApi != null && PlayniteApi.Database != null)
+            {
+                PlayniteApi.Database.Games.ItemUpdated += Games_ItemUpdated;
+            }
         }
         catch (Exception ex)
         {
@@ -191,7 +199,7 @@ public class ShortcutsLibrary : LibraryPlugin
         try
         {
             Logger.Info($"Reading shortcuts from: {vdfPath}");
-            var shortcuts = ShortcutsFile.Read(vdfPath);
+            var shortcuts = ShortcutsFile.Read(vdfPath!);
 
             var metas = new List<GameMetadata>();
             foreach (var sc in shortcuts)
@@ -259,7 +267,7 @@ public class ShortcutsLibrary : LibraryPlugin
         try
         {
             Logger.Info($"SyncBackAll: resolved shortcuts.vdf at '{vdfPath}'");
-            var shortcuts = ShortcutsFile.Read(vdfPath).ToList();
+            var shortcuts = ShortcutsFile.Read(vdfPath!).ToList();
             var games = PlayniteApi.Database.Games.Where(g => g.PluginId == Id).ToList();
             Logger.Info($"SyncBackAll: syncing {games.Count} games to shortcuts.vdf");
 
@@ -313,7 +321,7 @@ public class ShortcutsLibrary : LibraryPlugin
             }
 
             // Load existing shortcuts
-            var shortcuts = ShortcutsFile.Read(vdfPath).ToList();
+            var shortcuts = ShortcutsFile.Read(vdfPath!).ToList();
             bool changed = false;
 
             foreach (var upd in e.UpdatedItems)
