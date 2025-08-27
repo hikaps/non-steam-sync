@@ -1,0 +1,50 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch: {}
+
+jobs:
+  build-and-release:
+    name: Build and publish Playnite 10 .pext
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '6.x'
+
+      - name: Restore
+        run: dotnet restore src/SteamShortcutsImporter/SteamShortcutsImporter.csproj
+      - name: Build
+        run: dotnet build src/SteamShortcutsImporter/SteamShortcutsImporter.csproj -c Release
+
+      - name: Package .pext
+        shell: pwsh
+        run: |
+          $dll = Join-Path "src/SteamShortcutsImporter/bin/Release/net462" "SteamShortcutsImporter.dll"
+          $manifest = "src/SteamShortcutsImporter/extension.yaml"
+          $icon = "src/SteamShortcutsImporter/icon.png"
+          if (Test-Path "SteamShortcutsImporter.pext") { Remove-Item "SteamShortcutsImporter.pext" -Force }
+          $paths = @($dll, $manifest)
+          if (Test-Path $icon) { $paths += $icon }
+          Compress-Archive -Path $paths -DestinationPath "SteamShortcutsImporter.pext"
+      
+      - name: Rename artifact with tag
+        shell: pwsh
+        run: |
+          $tag = "$env:GITHUB_REF_NAME"
+          if ([string]::IsNullOrEmpty($tag)) { $tag = "dev" }
+          Rename-Item -Path "SteamShortcutsImporter.pext" -NewName "SteamShortcutsImporter-$tag.pext"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            SteamShortcutsImporter-*.pext
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
