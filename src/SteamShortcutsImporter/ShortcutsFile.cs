@@ -116,7 +116,7 @@ public static class ShortcutsFile
         static string Unquote(string s)
         {
             if (string.IsNullOrEmpty(s)) return s;
-            if (s.Length >= 2 && s[0] == '"' && s[^1] == '"')
+            if (s.Length >= 2 && s[0] == '"' && s[s.Length - 1] == '"')
             {
                 return s.Substring(1, s.Length - 2);
             }
