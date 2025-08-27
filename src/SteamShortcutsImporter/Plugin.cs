@@ -11,7 +11,7 @@ namespace SteamShortcutsImporter;
 
 public class PluginSettings : ISettings
 {
-    private readonly Plugin _plugin;
+    private readonly Plugin? _plugin;
 
     // Root Steam library/install path (e.g., C:\\Program Files (x86)\\Steam)
     public string SteamRootPath { get; set; } = string.Empty;
@@ -21,7 +21,10 @@ public class PluginSettings : ISettings
     public void CancelEdit() { }
     public void EndEdit()
     {
-        _plugin.SavePluginSettings(this);
+        if (_plugin != null)
+        {
+            _plugin.SavePluginSettings(this);
+        }
     }
     public bool VerifySettings(out List<string> errors)
     {
@@ -364,18 +367,19 @@ public class ShortcutsLibrary : LibraryPlugin
                                 GameId = sc.StableId,
                                 Name = sc.AppName,
                                 InstallDirectory = string.IsNullOrEmpty(sc.StartDir) ? null : sc.StartDir,
-                                GameActions = new List<GameAction>
-                                {
-                                    new GameAction
+                                GameActions = new System.Collections.ObjectModel.ObservableCollection<GameAction>(
+                                    new[]
                                     {
-                                        Name = "Play",
-                                        Type = GameActionType.File,
-                                        Path = sc.Exe,
-                                        Arguments = sc.LaunchOptions,
-                                        WorkingDir = sc.StartDir,
-                                        IsPlayAction = true
-                                    }
-                                }
+                                        new GameAction
+                                        {
+                                            Name = "Play",
+                                            Type = GameActionType.File,
+                                            Path = sc.Exe,
+                                            Arguments = sc.LaunchOptions,
+                                            WorkingDir = sc.StartDir,
+                                            IsPlayAction = true
+                                        }
+                                    })
                             };
 
                             // Apply tags if any exist
@@ -463,7 +467,7 @@ public class ShortcutsLibrary : LibraryPlugin
                 }
             }
 
-            ShortcutsFile.Write(vdfPath, shortcuts);
+            ShortcutsFile.Write(vdfPath!, shortcuts);
             PlayniteApi.Dialogs.ShowMessage("Synced to shortcuts.vdf", Name);
         }
         catch (Exception ex)
@@ -537,7 +541,7 @@ public class ShortcutsLibrary : LibraryPlugin
             if (changed)
             {
                 Logger.Info("Games_ItemUpdated: writing back updated shortcuts.vdf");
-                ShortcutsFile.Write(vdfPath, shortcuts);
+                ShortcutsFile.Write(vdfPath!, shortcuts);
             }
         }
         catch (Exception ex)
