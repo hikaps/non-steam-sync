@@ -42,7 +42,7 @@ public class PluginSettings : ISettings
     }
 }
 
-public class PluginSettingsView : Playnite.SDK.Controls.PluginUserControl
+public class PluginSettingsView : System.Windows.Controls.UserControl
 {
     public PluginSettingsView()
     {
@@ -93,60 +93,45 @@ public class ShortcutsLibrary : LibraryPlugin
         return view;
     }
 
-    public override IEnumerable<MainMenuItem> GetMainMenuItems(GetMainMenuItemsArgs args)
+    public override List<MainMenuItem> GetMainMenuItems(GetMainMenuItemsArgs args)
     {
-        yield return new MainMenuItem
+        return new List<MainMenuItem>
         {
-            Description = "Steam Shortcuts: Import",
-            MenuSection = "@Steam Shortcuts",
-            Action = _ => { ForceImport(); }
-        };
-        yield return new MainMenuItem
-        {
-            Description = "Steam Shortcuts: Sync Back",
-            MenuSection = "@Steam Shortcuts",
-            Action = _ => { SyncBackAll(); }
+            new MainMenuItem
+            {
+                Description = "Steam Shortcuts: Import",
+                MenuSection = "@Steam Shortcuts",
+                Action = _ => { ForceImport(); }
+            },
+            new MainMenuItem
+            {
+                Description = "Steam Shortcuts: Sync Back",
+                MenuSection = "@Steam Shortcuts",
+                Action = _ => { SyncBackAll(); }
+            }
         };
     }
 
-    public override IEnumerable<GameMetadata> GetGames(LibraryGetGamesArgs args)
+    public override IEnumerable<GameInfo> GetGames()
     {
         if (string.IsNullOrWhiteSpace(settings.ShortcutsVdfPath) || !File.Exists(settings.ShortcutsVdfPath))
         {
             Logger.Warn($"shortcuts.vdf not set or missing: {settings.ShortcutsVdfPath}");
-            return Enumerable.Empty<GameMetadata>();
+            return Enumerable.Empty<GameInfo>();
         }
 
         try
         {
             var shortcuts = ShortcutsFile.Read(settings.ShortcutsVdfPath);
 
-            var metas = new List<GameMetadata>();
+            var metas = new List<GameInfo>();
             foreach (var sc in shortcuts)
             {
-                var meta = new GameMetadata
+                var meta = new GameInfo
                 {
                     Name = sc.AppName,
                     GameId = sc.StableId,
-                    InstallDirectory = string.IsNullOrEmpty(sc.StartDir) ? null : sc.StartDir,
-                    Platforms = new List<MetadataProperty> { new MetadataNameProperty("Windows") },
-                    Tags = (sc.Tags ?? Enumerable.Empty<string>())
-                        .Select(t => new MetadataNameProperty(t)).Cast<MetadataProperty>().ToList(),
-                    Links = new List<Link>()
-                };
-
-                // Configure default play action
-                meta.GameActions = new List<GameAction>
-                {
-                    new GameAction
-                    {
-                        Name = "Play",
-                        Type = GameActionType.File,
-                        Path = sc.Exe,
-                        Arguments = sc.LaunchOptions,
-                        WorkingDir = sc.StartDir,
-                        IsPlayAction = true
-                    }
+                    InstallDirectory = string.IsNullOrEmpty(sc.StartDir) ? null : sc.StartDir
                 };
 
                 metas.Add(meta);
@@ -157,7 +142,7 @@ public class ShortcutsLibrary : LibraryPlugin
         catch (Exception ex)
         {
             Logger.Error(ex, "Failed to read shortcuts.vdf");
-            return Enumerable.Empty<GameMetadata>();
+            return Enumerable.Empty<GameInfo>();
         }
     }
 
