@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using Microsoft.Win32;
 
 namespace SteamShortcutsImporter;
 
@@ -12,7 +13,8 @@ public class PluginSettings : ISettings
 {
     private readonly Plugin _plugin;
 
-    public string ShortcutsVdfPath { get; set; } = string.Empty;
+    // Root Steam library/install path (e.g., C:\\Program Files (x86)\\Steam)
+    public string SteamRootPath { get; set; } = string.Empty;
 
     // Persisted settings copy
     public void BeginEdit() { }
@@ -24,9 +26,9 @@ public class PluginSettings : ISettings
     public bool VerifySettings(out List<string> errors)
     {
         errors = new List<string>();
-        if (string.IsNullOrWhiteSpace(ShortcutsVdfPath))
+        if (string.IsNullOrWhiteSpace(SteamRootPath))
         {
-            errors.Add("Shortcuts.vdf path is required.");
+            errors.Add("Steam library path is required.");
         }
         return errors.Count == 0;
     }
@@ -37,8 +39,51 @@ public class PluginSettings : ISettings
         var saved = plugin.LoadPluginSettings<PluginSettings>();
         if (saved != null)
         {
-            ShortcutsVdfPath = saved.ShortcutsVdfPath;
+            SteamRootPath = saved.SteamRootPath;
         }
+        else
+        {
+            // Try to prefill with a sensible default
+            SteamRootPath = GuessSteamRootPath() ?? string.Empty;
+        }
+    }
+
+    private static string? GuessSteamRootPath()
+    {
+        try
+        {
+            // 1) Registry value used by Steam installer
+            var regPath = Registry.CurrentUser.OpenSubKey(@"Software\\Valve\\Steam")?.GetValue("SteamPath") as string;
+            if (!string.IsNullOrWhiteSpace(regPath) && Directory.Exists(regPath))
+            {
+                return regPath;
+            }
+
+            // 2) Common install folders
+            var pf86 = Environment.GetEnvironmentVariable("ProgramFiles(x86)");
+            var pf = Environment.GetEnvironmentVariable("ProgramFiles");
+            var local = Environment.GetEnvironmentVariable("LocalAppData");
+
+            var candidates = new[]
+            {
+                pf86 != null ? Path.Combine(pf86, "Steam") : null,
+                pf != null ? Path.Combine(pf, "Steam") : null,
+                local != null ? Path.Combine(local, "Steam") : null
+            };
+
+            foreach (var c in candidates.Where(p => !string.IsNullOrWhiteSpace(p)))
+            {
+                if (Directory.Exists(c!))
+                {
+                    return c!;
+                }
+            }
+        }
+        catch
+        {
+            // ignore and return null
+        }
+        return null;
     }
 }
 
@@ -47,15 +92,15 @@ public class PluginSettingsView : System.Windows.Controls.UserControl
     public PluginSettingsView()
     {
         // Minimal placeholder. In a real project, add XAML and proper bindings.
-        var pathBox = new System.Windows.Controls.TextBox { Name = "ShortcutsPathBox", MinWidth = 300 };
+        var pathBox = new System.Windows.Controls.TextBox { Name = "SteamRootPathBox", MinWidth = 400 };
         pathBox.SetBinding(System.Windows.Controls.TextBox.TextProperty,
-            new System.Windows.Data.Binding("ShortcutsVdfPath") { Mode = System.Windows.Data.BindingMode.TwoWay });
+            new System.Windows.Data.Binding("SteamRootPath") { Mode = System.Windows.Data.BindingMode.TwoWay });
 
         Content = new System.Windows.Controls.StackPanel
         {
             Children =
             {
-                new System.Windows.Controls.TextBlock { Text = "Path to shortcuts.vdf:" },
+                new System.Windows.Controls.TextBlock { Text = "Steam library path (e.g., C\\\Program Files (x86)\\\Steam):" },
                 pathBox
             }
         };
@@ -111,15 +156,17 @@ public class ShortcutsLibrary : LibraryPlugin
 
     public override IEnumerable<GameMetadata> GetGames(LibraryGetGamesArgs args)
     {
-        if (string.IsNullOrWhiteSpace(settings.ShortcutsVdfPath) || !File.Exists(settings.ShortcutsVdfPath))
+        var vdfPath = ResolveShortcutsVdfPath();
+        if (string.IsNullOrWhiteSpace(vdfPath) || !File.Exists(vdfPath))
         {
-            Logger.Warn($"shortcuts.vdf not set or missing: {settings.ShortcutsVdfPath}");
+            Logger.Warn($"shortcuts.vdf not found. SteamRootPath= '{settings.SteamRootPath}' ResolvedVdf= '{vdfPath}'");
             return Enumerable.Empty<GameMetadata>();
         }
 
         try
         {
-            var shortcuts = ShortcutsFile.Read(settings.ShortcutsVdfPath);
+            Logger.Info($"Reading shortcuts from: {vdfPath}");
+            var shortcuts = ShortcutsFile.Read(vdfPath);
 
             var metas = new List<GameMetadata>();
             foreach (var sc in shortcuts)
@@ -152,6 +199,7 @@ public class ShortcutsLibrary : LibraryPlugin
                 metas.Add(meta);
             }
 
+            Logger.Info($"Imported {metas.Count} shortcuts as games.");
             return metas;
         }
         catch (Exception ex)
@@ -165,9 +213,10 @@ public class ShortcutsLibrary : LibraryPlugin
     {
         // Triggers Playnite to refresh this library by calling GetGames again.
         // Playnite refresh is managed by the host; this method mainly validates config and logs.
-        if (string.IsNullOrWhiteSpace(settings.ShortcutsVdfPath) || !File.Exists(settings.ShortcutsVdfPath))
+        var vdfPath = ResolveShortcutsVdfPath();
+        if (string.IsNullOrWhiteSpace(vdfPath) || !File.Exists(vdfPath))
         {
-            PlayniteApi.Dialogs.ShowErrorMessage("Set a valid shortcuts.vdf path in settings.", Name);
+            PlayniteApi.Dialogs.ShowErrorMessage("Set a valid Steam library path in settings (we’ll find shortcuts.vdf automatically).", Name);
             return;
         }
         PlayniteApi.Dialogs.ShowMessage("Run Library -> Update Game Library to import.", Name);
@@ -175,16 +224,19 @@ public class ShortcutsLibrary : LibraryPlugin
 
     private void SyncBackAll()
     {
-        if (string.IsNullOrWhiteSpace(settings.ShortcutsVdfPath))
+        var vdfPath = ResolveShortcutsVdfPath();
+        if (string.IsNullOrWhiteSpace(vdfPath))
         {
-            PlayniteApi.Dialogs.ShowErrorMessage("Set a valid shortcuts.vdf path in settings.", Name);
+            PlayniteApi.Dialogs.ShowErrorMessage("Set a valid Steam library path in settings.", Name);
             return;
         }
 
         try
         {
-            var shortcuts = ShortcutsFile.Read(settings.ShortcutsVdfPath).ToList();
+            Logger.Info($"SyncBackAll: resolved shortcuts.vdf at '{vdfPath}'");
+            var shortcuts = ShortcutsFile.Read(vdfPath).ToList();
             var games = PlayniteApi.Database.Games.Where(g => g.PluginId == Id).ToList();
+            Logger.Info($"SyncBackAll: syncing {games.Count} games to shortcuts.vdf");
 
             foreach (var game in games)
             {
@@ -215,7 +267,7 @@ public class ShortcutsLibrary : LibraryPlugin
                 }
             }
 
-            ShortcutsFile.Write(settings.ShortcutsVdfPath, shortcuts);
+            ShortcutsFile.Write(vdfPath, shortcuts);
             PlayniteApi.Dialogs.ShowMessage("Synced to shortcuts.vdf", Name);
         }
         catch (Exception ex)
@@ -229,13 +281,14 @@ public class ShortcutsLibrary : LibraryPlugin
         // Persist changes for games belonging to this library
         try
         {
-            if (string.IsNullOrWhiteSpace(settings.ShortcutsVdfPath))
+            var vdfPath = ResolveShortcutsVdfPath();
+            if (string.IsNullOrWhiteSpace(vdfPath))
             {
                 return;
             }
 
             // Load existing shortcuts
-            var shortcuts = ShortcutsFile.Read(settings.ShortcutsVdfPath).ToList();
+            var shortcuts = ShortcutsFile.Read(vdfPath).ToList();
             bool changed = false;
 
             foreach (var upd in e.UpdatedItems)
@@ -287,12 +340,63 @@ public class ShortcutsLibrary : LibraryPlugin
 
             if (changed)
             {
-                ShortcutsFile.Write(settings.ShortcutsVdfPath, shortcuts);
+                Logger.Info("Games_ItemUpdated: writing back updated shortcuts.vdf");
+                ShortcutsFile.Write(vdfPath, shortcuts);
             }
         }
         catch (Exception ex)
         {
             Logger.Error(ex, "Failed to sync back to shortcuts.vdf");
+        }
+    }
+
+    private string? ResolveShortcutsVdfPath()
+    {
+        try
+        {
+            var root = settings.SteamRootPath;
+            if (string.IsNullOrWhiteSpace(root))
+            {
+                return null;
+            }
+
+            // Backwards compatible: user pasted full path to shortcuts.vdf
+            if (File.Exists(root) && string.Equals(Path.GetFileName(root), "shortcuts.vdf", StringComparison.OrdinalIgnoreCase))
+            {
+                return root;
+            }
+
+            if (!Directory.Exists(root))
+            {
+                return null;
+            }
+
+            var userdata = Path.Combine(root, "userdata");
+            if (!Directory.Exists(userdata))
+            {
+                return null;
+            }
+
+            var candidates = Directory.GetDirectories(userdata)
+                .Select(uid => Path.Combine(uid, "config", "shortcuts.vdf"))
+                .Where(File.Exists)
+                .Select(p => new FileInfo(p))
+                .OrderByDescending(f => f.LastWriteTimeUtc)
+                .ToList();
+
+            if (candidates.Count == 0)
+            {
+                return null;
+            }
+
+            var chosen = candidates.First().FullName;
+            Logger.Info($"Resolved shortcuts.vdf candidate: {chosen} (from {candidates.Count} candidates)");
+            return chosen;
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex, "Failed to resolve shortcuts.vdf path.");
+            return null;
         }
     }
 }
