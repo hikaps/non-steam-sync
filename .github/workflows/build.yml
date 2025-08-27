@@ -23,13 +23,13 @@ jobs:
       - name: Package .pext
         shell: pwsh
         run: |
-          $out = "artifact"
-          New-Item -ItemType Directory -Force -Path $out | Out-Null
           $dll = Join-Path "src/SteamShortcutsImporter/bin/Release/net6.0-windows" "SteamShortcutsImporter.dll"
-          Copy-Item $dll $out
-          Copy-Item src/SteamShortcutsImporter/manifest.yaml $out
-          if (Test-Path src/SteamShortcutsImporter/icon.png) { Copy-Item src/SteamShortcutsImporter/icon.png $out }
-          Compress-Archive -Path "$out/*" -DestinationPath "SteamShortcutsImporter.pext"
+          $manifest = "src/SteamShortcutsImporter/manifest.yaml"
+          $icon = "src/SteamShortcutsImporter/icon.png"
+          if (Test-Path "SteamShortcutsImporter.pext") { Remove-Item "SteamShortcutsImporter.pext" -Force }
+          $paths = @($dll, $manifest)
+          if (Test-Path $icon) { $paths += $icon }
+          Compress-Archive -Path $paths -DestinationPath "SteamShortcutsImporter.pext"
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -54,4 +54,3 @@ jobs:
         with:
           name: ShortcutsCli
           path: tools/ShortcutsCli/bin/Release/net6.0/**
-
