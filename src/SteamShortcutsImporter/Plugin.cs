@@ -130,9 +130,8 @@ public class ShortcutsLibrary : LibraryPlugin
                     GameId = sc.StableId,
                     InstallDirectory = string.IsNullOrEmpty(sc.StartDir) ? null : sc.StartDir,
                     Platforms = new HashSet<MetadataProperty> { new MetadataNameProperty("Windows") },
-                    Tags = sc.Tags != null
-                        ? new HashSet<MetadataProperty>(sc.Tags.Select(t => new MetadataNameProperty(t)))
-                        : null,
+                    Tags = new HashSet<MetadataProperty>((sc.Tags ?? Enumerable.Empty<string>())
+                        .Select(t => new MetadataNameProperty(t))),
                     Links = new List<Link>()
                 };
 
@@ -207,8 +206,12 @@ public class ShortcutsLibrary : LibraryPlugin
                 }
                 if (game.TagIds?.Any() == true)
                 {
-                    sc.Tags = game.TagIds.Select(id => PlayniteApi.Database.Tags.Get(id)?.Name)
-                        .Where(n => !string.IsNullOrWhiteSpace(n)).Distinct().ToList();
+                    sc.Tags = game.TagIds
+                        .Select(id => PlayniteApi.Database.Tags.Get(id)?.Name)
+                        .Where(n => !string.IsNullOrWhiteSpace(n))
+                        .Select(n => n!)
+                        .Distinct()
+                        .ToList();
                 }
             }
 
@@ -221,7 +224,7 @@ public class ShortcutsLibrary : LibraryPlugin
             PlayniteApi.Dialogs.ShowErrorMessage($"Failed to sync: {ex.Message}", Name);
         }
     }
-    private void Games_ItemUpdated(object sender, ItemUpdatedEventArgs<Game> e)
+    private void Games_ItemUpdated(object? sender, ItemUpdatedEventArgs<Game> e)
     {
         // Persist changes for games belonging to this library
         try
@@ -272,8 +275,9 @@ public class ShortcutsLibrary : LibraryPlugin
                 if (game.TagIds?.Any() == true)
                 {
                     sc.Tags = game.TagIds
-                        .Select(id => Api.Database.Tags.Get(id)?.Name)
+                        .Select(id => PlayniteApi.Database.Tags.Get(id)?.Name)
                         .Where(n => !string.IsNullOrWhiteSpace(n))
+                        .Select(n => n!)
                         .Distinct()
                         .ToList();
                 }
