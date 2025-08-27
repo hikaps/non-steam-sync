@@ -6,7 +6,7 @@ Overview
 - Lets you configure the path to the target `shortcuts.vdf` (per Steam profile).
 
 Status
-- This is a scaffold suitable for building in Visual Studio/VS Code on Windows with Playnite SDK installed.
+- Targets Playnite 11+ (net6). If you’re on Playnite 10, let me know and I’ll add a net48 build.
 - Includes a minimal binary VDF (KeyValues1) reader/writer tailored to `shortcuts.vdf`.
 
 Build

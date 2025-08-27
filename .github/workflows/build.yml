@@ -8,7 +8,7 @@ on:
 
 jobs:
   plugin-windows:
-    name: Build Playnite plugin (Windows)
+    name: Build Playnite 10 plugin (Windows)
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,8 +23,8 @@ jobs:
       - name: Package .pext
         shell: pwsh
         run: |
-          $dll = Join-Path "src/SteamShortcutsImporter/bin/Release/net6.0-windows" "SteamShortcutsImporter.dll"
-          $manifest = "src/SteamShortcutsImporter/manifest.yaml"
+          $dll = Join-Path "src/SteamShortcutsImporter/bin/Release/net462" "SteamShortcutsImporter.dll"
+          $manifest = "src/SteamShortcutsImporter/extension.yaml"
           $icon = "src/SteamShortcutsImporter/icon.png"
           if (Test-Path "SteamShortcutsImporter.pext") { Remove-Item "SteamShortcutsImporter.pext" -Force }
           $paths = @($dll, $manifest)
