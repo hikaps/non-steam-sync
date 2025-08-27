@@ -100,7 +100,7 @@ public class PluginSettingsView : System.Windows.Controls.UserControl
         {
             Children =
             {
-                new System.Windows.Controls.TextBlock { Text = "Steam library path (e.g., C\\\Program Files (x86)\\\Steam):" },
+                new System.Windows.Controls.TextBlock { Text = "Steam library path (e.g., C:\\Program Files (x86)\\Steam):" },
                 pathBox
             }
         };
