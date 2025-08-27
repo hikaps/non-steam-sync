@@ -1,13 +1,14 @@
-<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
   <PropertyGroup>
     <TargetFramework>net6.0-windows</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <UseWPF>false</UseWPF>
+    <UseWPF>true</UseWPF>
     <AssemblyName>SteamShortcutsImporter</AssemblyName>
     <RootNamespace>SteamShortcutsImporter</RootNamespace>
     <Platforms>AnyCPU</Platforms>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
   </PropertyGroup>
 
   <ItemGroup>
@@ -18,4 +19,3 @@
     <None Include="manifest.yaml" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
-

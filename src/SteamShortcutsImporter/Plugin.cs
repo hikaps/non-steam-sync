@@ -10,7 +10,7 @@ namespace SteamShortcutsImporter;
 
 public class PluginSettings : ISettings
 {
-    private readonly IPlugin _plugin;
+    private readonly Plugin _plugin;
 
     public string ShortcutsVdfPath { get; set; } = string.Empty;
 
@@ -31,7 +31,7 @@ public class PluginSettings : ISettings
         return errors.Count == 0;
     }
 
-    public PluginSettings(IPlugin plugin)
+    public PluginSettings(Plugin plugin)
     {
         _plugin = plugin;
         var saved = plugin.LoadPluginSettings<PluginSettings>();
