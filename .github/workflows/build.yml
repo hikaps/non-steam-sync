@@ -1,0 +1,57 @@
+name: build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  plugin-windows:
+    name: Build Playnite plugin (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '6.x'
+      - name: Restore
+        run: dotnet restore src/SteamShortcutsImporter/SteamShortcutsImporter.csproj
+      - name: Build
+        run: dotnet build src/SteamShortcutsImporter/SteamShortcutsImporter.csproj -c Release
+      - name: Package .pext
+        shell: pwsh
+        run: |
+          $out = "artifact"
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          $dll = Join-Path "src/SteamShortcutsImporter/bin/Release/net6.0-windows" "SteamShortcutsImporter.dll"
+          Copy-Item $dll $out
+          Copy-Item src/SteamShortcutsImporter/manifest.yaml $out
+          if (Test-Path src/SteamShortcutsImporter/icon.png) { Copy-Item src/SteamShortcutsImporter/icon.png $out }
+          Compress-Archive -Path "$out/*" -DestinationPath "SteamShortcutsImporter.pext"
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SteamShortcutsImporter.pext
+          path: SteamShortcutsImporter.pext
+
+  cli-ubuntu:
+    name: Build CLI (Ubuntu)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '6.x'
+      - name: Restore
+        run: dotnet restore tools/ShortcutsCli/ShortcutsCli.csproj
+      - name: Build
+        run: dotnet build tools/ShortcutsCli/ShortcutsCli.csproj -c Release
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ShortcutsCli
+          path: tools/ShortcutsCli/bin/Release/net6.0/**
+

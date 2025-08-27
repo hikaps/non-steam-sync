@@ -1,0 +1,11 @@
+Id: nonsteam.shortcuts.importer
+Name: Steam Shortcuts Importer
+Author: You
+Version: 0.1.0
+Module: SteamShortcutsImporter.dll
+Type: GameLibrary
+Icon: icon.png
+Links:
+  - Name: Source
+    Url: https://example.com
+
