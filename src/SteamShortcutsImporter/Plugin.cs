@@ -175,9 +175,9 @@ public class ShortcutsLibrary : LibraryPlugin
     {
         yield return new MainMenuItem
         {
-            Description = "Steam Shortcuts: Import",
+            Description = "Steam Shortcuts: Import…",
             MenuSection = "@Steam Shortcuts",
-            Action = _ => { ForceImport(); }
+            Action = _ => { ShowImportDialog(); }
         };
         yield return new MainMenuItem
         {
@@ -253,6 +253,169 @@ public class ShortcutsLibrary : LibraryPlugin
             return;
         }
         PlayniteApi.Dialogs.ShowMessage("Run Library -> Update Game Library to import.", Name);
+    }
+
+    private void ShowImportDialog()
+    {
+        try
+        {
+            var vdfPath = ResolveShortcutsVdfPath();
+            if (string.IsNullOrWhiteSpace(vdfPath) || !File.Exists(vdfPath))
+            {
+                PlayniteApi.Dialogs.ShowErrorMessage("Set a valid Steam library path in settings (we’ll find shortcuts.vdf automatically).", Name);
+                return;
+            }
+
+            var shortcuts = ShortcutsFile.Read(vdfPath!).ToList();
+            Logger.Info($"Import dialog: loaded {shortcuts.Count} shortcuts from {vdfPath}");
+
+            // Prepare UI
+            var window = PlayniteApi.Dialogs.CreateWindow(new WindowCreationOptions
+            {
+                ShowCloseButton = true
+            });
+            window.Title = "Steam Shortcuts — Select Items to Import";
+            window.Width = 820;
+            window.Height = 600;
+
+            var root = new System.Windows.Controls.DockPanel { LastChildFill = true };
+
+            var topBar = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, Margin = new System.Windows.Thickness(8) };
+            var btnSelectAll = new System.Windows.Controls.Button { Content = "Select All", Margin = new System.Windows.Thickness(0, 0, 8, 0) };
+            var btnSelectNone = new System.Windows.Controls.Button { Content = "Deselect All" };
+            topBar.Children.Add(btnSelectAll);
+            topBar.Children.Add(btnSelectNone);
+            System.Windows.Controls.DockPanel.SetDock(topBar, System.Windows.Controls.Dock.Top);
+            root.Children.Add(topBar);
+
+            var scroll = new System.Windows.Controls.ScrollViewer { VerticalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto };
+            var listPanel = new System.Windows.Controls.StackPanel { Margin = new System.Windows.Thickness(8) };
+            scroll.Content = listPanel;
+            root.Children.Add(scroll);
+
+            var bottomBar = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, Margin = new System.Windows.Thickness(8), HorizontalAlignment = System.Windows.HorizontalAlignment.Right };
+            var btnImport = new System.Windows.Controls.Button { Content = "Import Selected", Margin = new System.Windows.Thickness(0, 0, 8, 0) };
+            var btnCancel = new System.Windows.Controls.Button { Content = "Cancel" };
+            bottomBar.Children.Add(btnImport);
+            bottomBar.Children.Add(btnCancel);
+            System.Windows.Controls.DockPanel.SetDock(bottomBar, System.Windows.Controls.Dock.Bottom);
+            root.Children.Add(bottomBar);
+
+            window.Content = root;
+
+            // Build list with checkboxes; default-check only items not already present
+            var existingById = PlayniteApi.Database.Games
+                .Where(g => g.PluginId == Id && !string.IsNullOrEmpty(g.GameId))
+                .ToDictionary(g => g.GameId, g => g, StringComparer.OrdinalIgnoreCase);
+
+            var checkBoxes = new List<System.Windows.Controls.CheckBox>();
+            foreach (var sc in shortcuts)
+            {
+                var summary = $"{sc.AppName} — {sc.Exe}";
+                var isAlready = !string.IsNullOrEmpty(sc.StableId) && existingById.ContainsKey(sc.StableId);
+                var cb = new System.Windows.Controls.CheckBox
+                {
+                    Content = summary,
+                    IsChecked = !isAlready,
+                    Tag = sc,
+                    Margin = new System.Windows.Thickness(0, 4, 0, 4)
+                };
+                checkBoxes.Add(cb);
+                listPanel.Children.Add(cb);
+            }
+
+            btnSelectAll.Click += (_, __) =>
+            {
+                foreach (var cb in checkBoxes) cb.IsChecked = true;
+            };
+            btnSelectNone.Click += (_, __) =>
+            {
+                foreach (var cb in checkBoxes) cb.IsChecked = false;
+            };
+            btnCancel.Click += (_, __) =>
+            {
+                window.DialogResult = false;
+                window.Close();
+            };
+            btnImport.Click += (_, __) =>
+            {
+                try
+                {
+                    var selected = checkBoxes
+                        .Where(c => c.IsChecked == true)
+                        .Select(c => (SteamShortcut)c.Tag)
+                        .ToList();
+                    Logger.Info($"Import dialog: user selected {selected.Count} items for import.");
+
+                    if (selected.Count > 0)
+                    {
+                        var newGames = new List<Game>();
+                        foreach (var sc in selected)
+                        {
+                            // Skip duplicates by GameId
+                            if (!string.IsNullOrEmpty(sc.StableId) && existingById.ContainsKey(sc.StableId))
+                            {
+                                continue;
+                            }
+
+                            var g = new Game
+                            {
+                                PluginId = Id,
+                                GameId = sc.StableId,
+                                Name = sc.AppName,
+                                InstallDirectory = string.IsNullOrEmpty(sc.StartDir) ? null : sc.StartDir,
+                                GameActions = new List<GameAction>
+                                {
+                                    new GameAction
+                                    {
+                                        Name = "Play",
+                                        Type = GameActionType.File,
+                                        Path = sc.Exe,
+                                        Arguments = sc.LaunchOptions,
+                                        WorkingDir = sc.StartDir,
+                                        IsPlayAction = true
+                                    }
+                                }
+                            };
+
+                            // Apply tags if any exist
+                            if (sc.Tags?.Any() == true)
+                            {
+                                g.TagIds = new List<Guid>();
+                                foreach (var tagName in sc.Tags.Distinct())
+                                {
+                                    var tag = PlayniteApi.Database.Tags.Add(tagName);
+                                    g.TagIds.Add(tag.Id);
+                                }
+                            }
+
+                            newGames.Add(g);
+                        }
+
+                        if (newGames.Count > 0)
+                        {
+                            PlayniteApi.Database.Games.Add(newGames);
+                            Logger.Info($"Import dialog: imported {newGames.Count} games.");
+                        }
+                    }
+
+                    window.DialogResult = true;
+                    window.Close();
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error(ex, "Failed to import selected shortcuts.");
+                    PlayniteApi.Dialogs.ShowErrorMessage($"Import failed: {ex.Message}", Name);
+                }
+            };
+
+            window.ShowDialog();
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex, "Failed to show import dialog.");
+            PlayniteApi.Dialogs.ShowErrorMessage($"Failed to open import dialog: {ex.Message}", Name);
+        }
     }
 
     private void SyncBackAll()
