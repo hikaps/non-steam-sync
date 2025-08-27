@@ -36,14 +36,22 @@ public class PluginSettings : ISettings
     public PluginSettings(Plugin plugin)
     {
         _plugin = plugin;
-        var saved = plugin.LoadPluginSettings<PluginSettings>();
-        if (saved != null)
+        try
         {
-            SteamRootPath = saved.SteamRootPath;
+            var saved = plugin.LoadPluginSettings<PluginSettings>();
+            if (saved != null)
+            {
+                SteamRootPath = saved.SteamRootPath;
+            }
+            else
+            {
+                // Try to prefill with a sensible default
+                SteamRootPath = GuessSteamRootPath() ?? string.Empty;
+            }
         }
-        else
+        catch (Exception ex)
         {
-            // Try to prefill with a sensible default
+            LogManager.GetLogger().Error(ex, "Failed to load saved settings, falling back to defaults.");
             SteamRootPath = GuessSteamRootPath() ?? string.Empty;
         }
     }
@@ -116,9 +124,26 @@ public class ShortcutsLibrary : LibraryPlugin
 
     public ShortcutsLibrary(IPlayniteAPI api) : base(api)
     {
-        settings = new PluginSettings(this);
-        // Listen for game updates to sync back changes
-        PlayniteApi.Database.Games.ItemUpdated += Games_ItemUpdated;
+        try
+        {
+            settings = new PluginSettings(this);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex, "Failed to initialize plugin settings.");
+            // Fallback to empty settings to avoid hard failure
+            settings = new PluginSettings(this) { SteamRootPath = string.Empty };
+        }
+
+        try
+        {
+            // Listen for game updates to sync back changes
+            PlayniteApi?.Database?.Games.ItemUpdated += Games_ItemUpdated;
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex, "Failed to attach Games.ItemUpdated handler.");
+        }
     }
 
     public override Guid Id => pluginId;
