@@ -73,14 +73,14 @@ public class ShortcutsLibrary : LibraryPlugin
     {
         settings = new PluginSettings(this);
         // Listen for game updates to sync back changes
-        PlayniteAPI.Database.Games.ItemUpdated += Games_ItemUpdated;
+        PlayniteApi.Database.Games.ItemUpdated += Games_ItemUpdated;
     }
 
     public override Guid Id => pluginId;
 
     public override string Name => "Steam Shortcuts";
 
-    public override LibraryClient Client => null;
+    // Use base implementation; Playnite 10 returns null by default.
 
     public override ISettings GetSettings(bool firstRunSettings) => settings;
 
