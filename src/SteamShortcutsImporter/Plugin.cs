@@ -215,22 +215,12 @@ public class ShortcutsLibrary : LibraryPlugin
                     Platforms = new HashSet<MetadataProperty> { new MetadataNameProperty("Windows") },
                     Tags = new HashSet<MetadataProperty>((sc.Tags ?? Enumerable.Empty<string>())
                         .Select(t => new MetadataNameProperty(t))),
-                    Links = new List<Link>()
+                    Links = new List<Link>(),
+                    IsInstalled = true,
                 };
 
                 // Configure default play action
-                meta.GameActions = new List<GameAction>
-                {
-                    new GameAction
-                    {
-                        Name = "Play",
-                        Type = GameActionType.File,
-                        Path = sc.Exe,
-                        Arguments = sc.LaunchOptions,
-                        WorkingDir = sc.StartDir,
-                        IsPlayAction = true
-                    }
-                };
+                meta.GameActions = new List<GameAction> { BuildPlayAction(sc) };
 
                 metas.Add(meta);
             }
@@ -243,6 +233,29 @@ public class ShortcutsLibrary : LibraryPlugin
             Logger.Error(ex, "Failed to read shortcuts.vdf");
             return Enumerable.Empty<GameMetadata>();
         }
+    }
+
+    private GameAction BuildPlayAction(SteamShortcut sc)
+    {
+        if (sc.AppId != 0)
+        {
+            return new GameAction
+            {
+                Name = "Play (Steam)",
+                Type = GameActionType.URL,
+                Path = $"steam://rungameid/{sc.AppId}",
+                IsPlayAction = true
+            };
+        }
+        return new GameAction
+        {
+            Name = "Play",
+            Type = GameActionType.File,
+            Path = sc.Exe,
+            Arguments = sc.LaunchOptions,
+            WorkingDir = sc.StartDir,
+            IsPlayAction = true
+        };
     }
 
     private void ForceImport()
@@ -285,30 +298,35 @@ public class ShortcutsLibrary : LibraryPlugin
             window.Width = 820;
             window.Height = 600;
 
-            var root = new System.Windows.Controls.DockPanel { LastChildFill = true };
+            // Grid layout: row 0 = list (fills), row 1 = buttons (bottom)
+            var grid = new System.Windows.Controls.Grid();
+            grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = new System.Windows.GridLength(1, System.Windows.GridUnitType.Star) });
+            grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = System.Windows.GridLength.Auto });
 
-            var topBar = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, Margin = new System.Windows.Thickness(8) };
+            var topBar = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, Margin = new System.Windows.Thickness(8,8,8,0) };
             var btnSelectAll = new System.Windows.Controls.Button { Content = "Select All", Margin = new System.Windows.Thickness(0, 0, 8, 0) };
             var btnSelectNone = new System.Windows.Controls.Button { Content = "Deselect All" };
             topBar.Children.Add(btnSelectAll);
             topBar.Children.Add(btnSelectNone);
-            System.Windows.Controls.DockPanel.SetDock(topBar, System.Windows.Controls.Dock.Top);
-            root.Children.Add(topBar);
 
+            var listHost = new System.Windows.Controls.StackPanel();
+            listHost.Children.Add(topBar);
             var scroll = new System.Windows.Controls.ScrollViewer { VerticalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto };
             var listPanel = new System.Windows.Controls.StackPanel { Margin = new System.Windows.Thickness(8) };
             scroll.Content = listPanel;
-            root.Children.Add(scroll);
+            listHost.Children.Add(scroll);
+            System.Windows.Controls.Grid.SetRow(listHost, 0);
+            grid.Children.Add(listHost);
 
             var bottomBar = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, Margin = new System.Windows.Thickness(8), HorizontalAlignment = System.Windows.HorizontalAlignment.Right };
             var btnImport = new System.Windows.Controls.Button { Content = "Import Selected", Margin = new System.Windows.Thickness(0, 0, 8, 0) };
             var btnCancel = new System.Windows.Controls.Button { Content = "Cancel" };
             bottomBar.Children.Add(btnImport);
             bottomBar.Children.Add(btnCancel);
-            System.Windows.Controls.DockPanel.SetDock(bottomBar, System.Windows.Controls.Dock.Bottom);
-            root.Children.Add(bottomBar);
+            System.Windows.Controls.Grid.SetRow(bottomBar, 1);
+            grid.Children.Add(bottomBar);
 
-            window.Content = root;
+            window.Content = grid;
 
             // Build list with checkboxes; default-check only items not already present
             var existingById = PlayniteApi.Database.Games
@@ -371,18 +389,11 @@ public class ShortcutsLibrary : LibraryPlugin
                                 GameId = sc.StableId,
                                 Name = sc.AppName,
                                 InstallDirectory = string.IsNullOrEmpty(sc.StartDir) ? null : sc.StartDir,
+                                IsInstalled = true,
                                 GameActions = new System.Collections.ObjectModel.ObservableCollection<GameAction>(
                                     new[]
                                     {
-                                        new GameAction
-                                        {
-                                            Name = "Play",
-                                            Type = GameActionType.File,
-                                            Path = sc.Exe,
-                                            Arguments = sc.LaunchOptions,
-                                            WorkingDir = sc.StartDir,
-                                            IsPlayAction = true
-                                        }
+                                        BuildPlayAction(sc)
                                     })
                             };
 
@@ -403,6 +414,23 @@ public class ShortcutsLibrary : LibraryPlugin
                         if (newGames.Count > 0)
                         {
                             PlayniteApi.Database.Games.Add(newGames);
+                            // Optionally sync existing artwork from Steam grid into Playnite on import
+                            try
+                            {
+                                var gridDir = TryGetGridDirFromVdf(vdfPath!);
+                                if (!string.IsNullOrEmpty(gridDir) && Directory.Exists(gridDir))
+                                {
+                                    foreach (var g in newGames)
+                                    {
+                                        var appId = selected.First(s => s.StableId == g.GameId).AppId;
+                                        TryImportArtworkFromGrid(g, appId, gridDir);
+                                    }
+                                }
+                            }
+                            catch (Exception aex)
+                            {
+                                Logger.Warn(aex, "Import dialog: artwork import from grid failed.");
+                            }
                             Logger.Info($"Import dialog: imported {newGames.Count} games.");
                         }
                     }
@@ -469,6 +497,16 @@ public class ShortcutsLibrary : LibraryPlugin
                         .Distinct()
                         .ToList();
                 }
+
+                // Compute AppId if missing
+                if (sc.AppId == 0)
+                {
+                    sc.AppId = Utils.GenerateShortcutAppId(sc.Exe, sc.AppName);
+                }
+
+                // Sync artwork from Playnite to Steam grid
+                var gridDir = TryGetGridDirFromVdf(vdfPath!);
+                TryExportArtworkToGrid(game, sc.AppId, gridDir);
             }
 
             ShortcutsFile.Write(vdfPath!, shortcuts);
@@ -539,6 +577,16 @@ public class ShortcutsLibrary : LibraryPlugin
                         .ToList();
                 }
 
+                // AppId
+                if (sc.AppId == 0)
+                {
+                    sc.AppId = Utils.GenerateShortcutAppId(sc.Exe, sc.AppName);
+                }
+
+                // Sync artwork to grid
+                var gridDir = TryGetGridDirFromVdf(vdfPath!);
+                TryExportArtworkToGrid(game, sc.AppId, gridDir);
+
                 changed = true;
             }
 
@@ -608,6 +656,95 @@ public class ShortcutsLibrary : LibraryPlugin
         {
             Logger.Error(ex, "Failed to resolve shortcuts.vdf path.");
             return null;
+        }
+    }
+
+    private static string? TryGetGridDirFromVdf(string vdfPath)
+    {
+        try
+        {
+            var cfgDir = Path.GetDirectoryName(vdfPath);
+            if (string.IsNullOrEmpty(cfgDir)) return null;
+            var grid = Path.Combine(cfgDir, "grid");
+            return grid;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private void TryExportArtworkToGrid(Game game, uint appId, string? gridDir)
+    {
+        if (appId == 0 || string.IsNullOrEmpty(gridDir)) return;
+        try
+        {
+            Directory.CreateDirectory(gridDir);
+
+            // Helper to resolve and copy
+            void CopyIfExists(string dbPath, string targetNameBase)
+            {
+                if (string.IsNullOrEmpty(dbPath)) return;
+                var src = PlayniteApi.Database.GetFullFilePath(dbPath);
+                if (string.IsNullOrEmpty(src) || !File.Exists(src)) return;
+                var ext = Path.GetExtension(src);
+                var dst = Path.Combine(gridDir!, targetNameBase + ext);
+                File.Copy(src, dst, overwrite: true);
+            }
+
+            // Cover → <appid>.png and <appid>p.png
+            if (!string.IsNullOrEmpty(game.CoverImage))
+            {
+                CopyIfExists(game.CoverImage, appId.ToString());
+                CopyIfExists(game.CoverImage, appId + "p");
+            }
+
+            // Icon → <appid>_icon.png
+            if (!string.IsNullOrEmpty(game.Icon))
+            {
+                CopyIfExists(game.Icon, appId + "_icon");
+            }
+
+            // Background → <appid>_hero.jpg/png
+            if (!string.IsNullOrEmpty(game.BackgroundImage))
+            {
+                CopyIfExists(game.BackgroundImage, appId + "_hero");
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn(ex, $"Failed exporting artwork to grid for appId={appId}");
+        }
+    }
+
+    private void TryImportArtworkFromGrid(Game game, uint appId, string gridDir)
+    {
+        try
+        {
+            if (appId == 0 || !Directory.Exists(gridDir)) return;
+
+            // Prefer hero for background
+            string[] hero = Directory.GetFiles(gridDir, appId + "_hero.*");
+            string[] icon = Directory.GetFiles(gridDir, appId + "_icon.*");
+            string[] cover = Directory.GetFiles(gridDir, appId + ".*");
+            string[] poster = Directory.GetFiles(gridDir, appId + "p.*");
+
+            string? Pick(string[] arr) => arr.FirstOrDefault();
+
+            var bg = Pick(hero);
+            var ic = Pick(icon);
+            var cv = Pick(poster.Length > 0 ? poster : cover);
+
+            // Assign paths into Playnite DB storage
+            if (!string.IsNullOrEmpty(bg)) game.BackgroundImage = PlayniteApi.Database.AddFile(bg);
+            if (!string.IsNullOrEmpty(ic)) game.Icon = PlayniteApi.Database.AddFile(ic);
+            if (!string.IsNullOrEmpty(cv)) game.CoverImage = PlayniteApi.Database.AddFile(cv);
+
+            PlayniteApi.Database.Games.Update(game);
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn(ex, $"Failed importing artwork from grid for appId={appId}");
         }
     }
 }

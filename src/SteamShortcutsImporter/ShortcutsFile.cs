@@ -14,6 +14,7 @@ public class SteamShortcut
     public string Icon { get; set; } = string.Empty;
     public string ShortcutPath { get; set; } = string.Empty;
     public string LaunchOptions { get; set; } = string.Empty;
+    public uint AppId { get; set; }
     public int IsHidden { get; set; } = 0;
     public int AllowDesktopConfig { get; set; } = 1;
     public int AllowOverlay { get; set; } = 1;
@@ -131,6 +132,7 @@ public static class ShortcutsFile
             Icon = GetStr("icon", "Icon"),
             ShortcutPath = GetStr("ShortcutPath"),
             LaunchOptions = GetStr("LaunchOptions"),
+            AppId = (uint)GetInt("appid", "AppId"),
             IsHidden = GetInt("IsHidden"),
             AllowDesktopConfig = GetInt("AllowDesktopConfig"),
             AllowOverlay = GetInt("AllowOverlay"),
@@ -156,6 +158,7 @@ public static class ShortcutsFile
             ["icon"] = sc.Icon ?? string.Empty,
             ["ShortcutPath"] = sc.ShortcutPath ?? string.Empty,
             ["LaunchOptions"] = sc.LaunchOptions ?? string.Empty,
+            ["appid"] = unchecked((int)sc.AppId),
             ["IsHidden"] = sc.IsHidden,
             ["AllowDesktopConfig"] = sc.AllowDesktopConfig,
             ["AllowOverlay"] = sc.AllowOverlay,
@@ -195,6 +198,54 @@ internal static class Utils
             }
             return hash.ToString("x16");
         }
+    }
+
+    public static uint Crc32(byte[] data)
+    {
+        unchecked
+        {
+            uint[] table = Crc32Table;
+            uint crc = 0xFFFFFFFF;
+            for (int i = 0; i < data.Length; i++)
+            {
+                byte index = (byte)((crc ^ data[i]) & 0xFF);
+                crc = (crc >> 8) ^ table[index];
+            }
+            return ~crc;
+        }
+    }
+
+    public static uint GenerateShortcutAppId(string exe, string appName)
+    {
+        // Common approach used by community tools; Steam ORs with 0x80000000 for shortcuts
+        var seed = (exe ?? string.Empty) + (appName ?? string.Empty);
+        var crc = Crc32(Encoding.UTF8.GetBytes(seed));
+        return crc | 0x80000000u;
+    }
+
+    private static uint[]? _crcTable;
+    private static uint[] Crc32Table => _crcTable ??= BuildCrc32Table();
+    private static uint[] BuildCrc32Table()
+    {
+        const uint poly = 0xEDB88320;
+        var table = new uint[256];
+        for (uint i = 0; i < 256; i++)
+        {
+            uint c = i;
+            for (int j = 0; j < 8; j++)
+            {
+                if ((c & 1) != 0)
+                {
+                    c = poly ^ (c >> 1);
+                }
+                else
+                {
+                    c >>= 1;
+                }
+            }
+            table[i] = c;
+        }
+        return table;
     }
 }
 
