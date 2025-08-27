@@ -152,24 +152,24 @@ public class ShortcutsLibrary : LibraryPlugin
         // Playnite refresh is managed by the host; this method mainly validates config and logs.
         if (string.IsNullOrWhiteSpace(settings.ShortcutsVdfPath) || !File.Exists(settings.ShortcutsVdfPath))
         {
-            PlayniteAPI.Dialogs.ShowErrorMessage("Set a valid shortcuts.vdf path in settings.", Name);
+            PlayniteApi.Dialogs.ShowErrorMessage("Set a valid shortcuts.vdf path in settings.", Name);
             return;
         }
-        PlayniteAPI.Dialogs.ShowMessage("Run Library -> Update Game Library to import.", Name);
+        PlayniteApi.Dialogs.ShowMessage("Run Library -> Update Game Library to import.", Name);
     }
 
     private void SyncBackAll()
     {
         if (string.IsNullOrWhiteSpace(settings.ShortcutsVdfPath))
         {
-            PlayniteAPI.Dialogs.ShowErrorMessage("Set a valid shortcuts.vdf path in settings.", Name);
+            PlayniteApi.Dialogs.ShowErrorMessage("Set a valid shortcuts.vdf path in settings.", Name);
             return;
         }
 
         try
         {
             var shortcuts = ShortcutsFile.Read(settings.ShortcutsVdfPath).ToList();
-            var games = PlayniteAPI.Database.Games.Where(g => g.PluginId == Id).ToList();
+            var games = PlayniteApi.Database.Games.Where(g => g.PluginId == Id).ToList();
 
             foreach (var game in games)
             {
@@ -182,8 +182,8 @@ public class ShortcutsLibrary : LibraryPlugin
                 }
 
                 sc.AppName = game.Name;
-                var action = game.GameActions?.FirstOrDefault(a => a.IsPlayAction) ?? game.GameActions?.FirstOrDefault();
-                if (action != null)
+                var action = game.PlayAction;
+                if (action != null && action.Type == GameActionType.File)
                 {
                     sc.Exe = action.Path ?? sc.Exe;
                     sc.LaunchOptions = action.Arguments ?? sc.LaunchOptions;
@@ -192,7 +192,7 @@ public class ShortcutsLibrary : LibraryPlugin
                 if (game.TagIds?.Any() == true)
                 {
                     sc.Tags = game.TagIds
-                        .Select(id => PlayniteAPI.Database.Tags.Get(id)?.Name)
+                        .Select(id => PlayniteApi.Database.Tags.Get(id)?.Name)
                         .Where(n => !string.IsNullOrWhiteSpace(n))
                         .Select(n => n!)
                         .Distinct()
@@ -201,12 +201,12 @@ public class ShortcutsLibrary : LibraryPlugin
             }
 
             ShortcutsFile.Write(settings.ShortcutsVdfPath, shortcuts);
-            PlayniteAPI.Dialogs.ShowMessage("Synced to shortcuts.vdf", Name);
+            PlayniteApi.Dialogs.ShowMessage("Synced to shortcuts.vdf", Name);
         }
         catch (Exception ex)
         {
             Logger.Error(ex, "Sync back error");
-            PlayniteAPI.Dialogs.ShowErrorMessage($"Failed to sync: {ex.Message}", Name);
+            PlayniteApi.Dialogs.ShowErrorMessage($"Failed to sync: {ex.Message}", Name);
         }
     }
     private void Games_ItemUpdated(object? sender, ItemUpdatedEventArgs<Game> e)
@@ -248,8 +248,8 @@ public class ShortcutsLibrary : LibraryPlugin
                 // Map back common fields
                 sc.AppName = game.Name;
 
-                var action = game.GameActions?.FirstOrDefault(a => a.IsPlayAction) ?? game.GameActions?.FirstOrDefault();
-                if (action != null)
+                var action = game.PlayAction;
+                if (action != null && action.Type == GameActionType.File)
                 {
                     sc.Exe = action.Path ?? sc.Exe;
                     sc.LaunchOptions = action.Arguments ?? sc.LaunchOptions;
@@ -260,7 +260,7 @@ public class ShortcutsLibrary : LibraryPlugin
                 if (game.TagIds?.Any() == true)
                 {
                     sc.Tags = game.TagIds
-                        .Select(id => PlayniteAPI.Database.Tags.Get(id)?.Name)
+                        .Select(id => PlayniteApi.Database.Tags.Get(id)?.Name)
                         .Where(n => !string.IsNullOrWhiteSpace(n))
                         .Select(n => n!)
                         .Distinct()
