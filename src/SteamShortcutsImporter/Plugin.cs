@@ -93,45 +93,60 @@ public class ShortcutsLibrary : LibraryPlugin
         return view;
     }
 
-    public override List<MainMenuItem> GetMainMenuItems(GetMainMenuItemsArgs args)
+    public override IEnumerable<MainMenuItem> GetMainMenuItems(GetMainMenuItemsArgs args)
     {
-        return new List<MainMenuItem>
+        yield return new MainMenuItem
         {
-            new MainMenuItem
-            {
-                Description = "Steam Shortcuts: Import",
-                MenuSection = "@Steam Shortcuts",
-                Action = _ => { ForceImport(); }
-            },
-            new MainMenuItem
-            {
-                Description = "Steam Shortcuts: Sync Back",
-                MenuSection = "@Steam Shortcuts",
-                Action = _ => { SyncBackAll(); }
-            }
+            Description = "Steam Shortcuts: Import",
+            MenuSection = "@Steam Shortcuts",
+            Action = _ => { ForceImport(); }
+        };
+        yield return new MainMenuItem
+        {
+            Description = "Steam Shortcuts: Sync Back",
+            MenuSection = "@Steam Shortcuts",
+            Action = _ => { SyncBackAll(); }
         };
     }
 
-    public override IEnumerable<GameInfo> GetGames()
+    public override IEnumerable<GameMetadata> GetGames(LibraryGetGamesArgs args)
     {
         if (string.IsNullOrWhiteSpace(settings.ShortcutsVdfPath) || !File.Exists(settings.ShortcutsVdfPath))
         {
             Logger.Warn($"shortcuts.vdf not set or missing: {settings.ShortcutsVdfPath}");
-            return Enumerable.Empty<GameInfo>();
+            return Enumerable.Empty<GameMetadata>();
         }
 
         try
         {
             var shortcuts = ShortcutsFile.Read(settings.ShortcutsVdfPath);
 
-            var metas = new List<GameInfo>();
+            var metas = new List<GameMetadata>();
             foreach (var sc in shortcuts)
             {
-                var meta = new GameInfo
+                var meta = new GameMetadata
                 {
                     Name = sc.AppName,
                     GameId = sc.StableId,
-                    InstallDirectory = string.IsNullOrEmpty(sc.StartDir) ? null : sc.StartDir
+                    InstallDirectory = string.IsNullOrEmpty(sc.StartDir) ? null : sc.StartDir,
+                    Platforms = new HashSet<MetadataProperty> { new MetadataNameProperty("Windows") },
+                    Tags = new HashSet<MetadataProperty>((sc.Tags ?? Enumerable.Empty<string>())
+                        .Select(t => new MetadataNameProperty(t))),
+                    Links = new List<Link>()
+                };
+
+                // Configure default play action
+                meta.GameActions = new List<GameAction>
+                {
+                    new GameAction
+                    {
+                        Name = "Play",
+                        Type = GameActionType.File,
+                        Path = sc.Exe,
+                        Arguments = sc.LaunchOptions,
+                        WorkingDir = sc.StartDir,
+                        IsPlayAction = true
+                    }
                 };
 
                 metas.Add(meta);
@@ -142,7 +157,7 @@ public class ShortcutsLibrary : LibraryPlugin
         catch (Exception ex)
         {
             Logger.Error(ex, "Failed to read shortcuts.vdf");
-            return Enumerable.Empty<GameInfo>();
+            return Enumerable.Empty<GameMetadata>();
         }
     }
 
@@ -209,7 +224,7 @@ public class ShortcutsLibrary : LibraryPlugin
             PlayniteApi.Dialogs.ShowErrorMessage($"Failed to sync: {ex.Message}", Name);
         }
     }
-    private void Games_ItemUpdated(object? sender, ItemUpdatedEventArgs<Game> e)
+    private void Games_ItemUpdated(object sender, ItemUpdatedEventArgs<Game> e)
     {
         // Persist changes for games belonging to this library
         try
