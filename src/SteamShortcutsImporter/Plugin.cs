@@ -197,7 +197,7 @@ public class ShortcutsLibrary : LibraryPlugin
                 }
 
                 sc.AppName = game.Name;
-                var action = game.PlayAction;
+                var action = game.GameActions?.FirstOrDefault(a => a.IsPlayAction) ?? game.GameActions?.FirstOrDefault();
                 if (action != null && action.Type == GameActionType.File)
                 {
                     sc.Exe = action.Path ?? sc.Exe;
@@ -263,7 +263,7 @@ public class ShortcutsLibrary : LibraryPlugin
                 // Map back common fields
                 sc.AppName = game.Name;
 
-                var action = game.PlayAction;
+                var action = game.GameActions?.FirstOrDefault(a => a.IsPlayAction) ?? game.GameActions?.FirstOrDefault();
                 if (action != null && action.Type == GameActionType.File)
                 {
                     sc.Exe = action.Path ?? sc.Exe;
