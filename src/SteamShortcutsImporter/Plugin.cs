@@ -271,6 +271,10 @@ public class ShortcutsLibrary : LibraryPlugin
 
             var shortcuts = ShortcutsFile.Read(vdfPath!).ToList();
             Logger.Info($"Import dialog: loaded {shortcuts.Count} shortcuts from {vdfPath}");
+            if (shortcuts.Count == 0)
+            {
+                PlayniteApi.Dialogs.ShowMessage($"No shortcuts found in {vdfPath}. If you manually copied shortcuts.vdf, ensure it’s a binary file from Steam and not a text paste.", Name);
+            }
 
             // Prepare UI
             var window = PlayniteApi.Dialogs.CreateWindow(new WindowCreationOptions
@@ -569,6 +573,13 @@ public class ShortcutsLibrary : LibraryPlugin
             if (!Directory.Exists(root))
             {
                 return null;
+            }
+
+            // If shortcuts.vdf is placed directly under root (user copied it there), use it
+            var directCandidate = Path.Combine(root, "shortcuts.vdf");
+            if (File.Exists(directCandidate))
+            {
+                return directCandidate;
             }
 
             var userdata = Path.Combine(root, "userdata");

@@ -71,15 +71,64 @@ public static class ShortcutsFile
 
     private static SteamShortcut ParseShortcut(Dictionary<string, object> obj)
     {
-        string GetStr(string k) => obj.TryGetValue(k, out var v) ? v?.ToString() ?? string.Empty : string.Empty;
-        int GetInt(string k) => obj.TryGetValue(k, out var v) && v is int i ? i : 0;
+        string GetStr(params string[] keys)
+        {
+            foreach (var k in keys)
+            {
+                if (obj.TryGetValue(k, out var v))
+                {
+                    return v?.ToString() ?? string.Empty;
+                }
+            }
+            // case-insensitive fallback
+            foreach (var kv in obj)
+            {
+                if (keys.Any(k => string.Equals(k, kv.Key, StringComparison.OrdinalIgnoreCase)))
+                {
+                    return kv.Value?.ToString() ?? string.Empty;
+                }
+            }
+            return string.Empty;
+        }
+
+        int GetInt(params string[] keys)
+        {
+            foreach (var k in keys)
+            {
+                if (obj.TryGetValue(k, out var v) && v is int i)
+                {
+                    return i;
+                }
+            }
+            foreach (var kv in obj)
+            {
+                if (keys.Any(k => string.Equals(k, kv.Key, StringComparison.OrdinalIgnoreCase)))
+                {
+                    if (kv.Value is int ii)
+                    {
+                        return ii;
+                    }
+                }
+            }
+            return 0;
+        }
+
+        static string Unquote(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return s;
+            if (s.Length >= 2 && s[0] == '"' && s[^1] == '"')
+            {
+                return s.Substring(1, s.Length - 2);
+            }
+            return s;
+        }
 
         var shortcut = new SteamShortcut
         {
-            AppName = GetStr("appname"),
-            Exe = GetStr("exe"),
+            AppName = GetStr("appname", "AppName"),
+            Exe = Unquote(GetStr("exe", "Exe")),
             StartDir = GetStr("StartDir"),
-            Icon = GetStr("icon"),
+            Icon = GetStr("icon", "Icon"),
             ShortcutPath = GetStr("ShortcutPath"),
             LaunchOptions = GetStr("LaunchOptions"),
             IsHidden = GetInt("IsHidden"),
@@ -88,7 +137,8 @@ public static class ShortcutsFile
             OpenVR = GetInt("OpenVR"),
         };
 
-        if (obj.TryGetValue("tags", out var tagsObj) && tagsObj is Dictionary<string, object> tags)
+        var tagsObj = obj.FirstOrDefault(kv => string.Equals(kv.Key, "tags", StringComparison.OrdinalIgnoreCase)).Value;
+        if (tagsObj is Dictionary<string, object> tags)
         {
             shortcut.Tags = tags.OrderBy(k => k.Key).Select(k => k.Value?.ToString() ?? string.Empty).Where(s => !string.IsNullOrWhiteSpace(s)).ToList();
         }
@@ -150,10 +200,12 @@ internal static class Utils
 
 internal static class BinaryKv
 {
-    private const byte End = 0x00;
+    // Binary KeyValues used by Steam shortcuts.vdf
+    // 0x00 = object (node), 0x08 = end of object
+    private const byte Object = 0x00;
     private const byte String = 0x01;
     private const byte Int32 = 0x02;
-    private const byte Object = 0x08;
+    private const byte End = 0x08;
 
     public static Dictionary<string, object> ReadObject(Stream stream)
     {
@@ -243,4 +295,3 @@ internal static class BinaryKv
         bw.Write((byte)0);
     }
 }
-
