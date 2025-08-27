@@ -73,7 +73,7 @@ public class ShortcutsLibrary : LibraryPlugin
     {
         settings = new PluginSettings(this);
         // Listen for game updates to sync back changes
-        API.Instance.Database.Games.ItemUpdated += Games_ItemUpdated;
+        PlayniteApi.Database.Games.ItemUpdated += Games_ItemUpdated;
     }
 
     public override Guid Id => pluginId;
@@ -152,24 +152,24 @@ public class ShortcutsLibrary : LibraryPlugin
         // Playnite refresh is managed by the host; this method mainly validates config and logs.
         if (string.IsNullOrWhiteSpace(settings.ShortcutsVdfPath) || !File.Exists(settings.ShortcutsVdfPath))
         {
-            API.Instance.Dialogs.ShowErrorMessage("Set a valid shortcuts.vdf path in settings.", Name);
+            PlayniteApi.Dialogs.ShowErrorMessage("Set a valid shortcuts.vdf path in settings.", Name);
             return;
         }
-        API.Instance.Dialogs.ShowMessage("Run Library -> Update Game Library to import.", Name);
+        PlayniteApi.Dialogs.ShowMessage("Run Library -> Update Game Library to import.", Name);
     }
 
     private void SyncBackAll()
     {
         if (string.IsNullOrWhiteSpace(settings.ShortcutsVdfPath))
         {
-            API.Instance.Dialogs.ShowErrorMessage("Set a valid shortcuts.vdf path in settings.", Name);
+            PlayniteApi.Dialogs.ShowErrorMessage("Set a valid shortcuts.vdf path in settings.", Name);
             return;
         }
 
         try
         {
             var shortcuts = ShortcutsFile.Read(settings.ShortcutsVdfPath).ToList();
-            var games = API.Instance.Database.Games.Where(g => g.PluginId == Id).ToList();
+            var games = PlayniteApi.Database.Games.Where(g => g.PluginId == Id).ToList();
 
             foreach (var game in games)
             {
@@ -192,7 +192,7 @@ public class ShortcutsLibrary : LibraryPlugin
                 if (game.TagIds?.Any() == true)
                 {
                     sc.Tags = game.TagIds
-                        .Select(id => API.Instance.Database.Tags.Get(id)?.Name)
+                        .Select(id => PlayniteApi.Database.Tags.Get(id)?.Name)
                         .Where(n => !string.IsNullOrWhiteSpace(n))
                         .Select(n => n!)
                         .Distinct()
@@ -201,12 +201,12 @@ public class ShortcutsLibrary : LibraryPlugin
             }
 
             ShortcutsFile.Write(settings.ShortcutsVdfPath, shortcuts);
-            API.Instance.Dialogs.ShowMessage("Synced to shortcuts.vdf", Name);
+            PlayniteApi.Dialogs.ShowMessage("Synced to shortcuts.vdf", Name);
         }
         catch (Exception ex)
         {
             Logger.Error(ex, "Sync back error");
-            API.Instance.Dialogs.ShowErrorMessage($"Failed to sync: {ex.Message}", Name);
+            PlayniteApi.Dialogs.ShowErrorMessage($"Failed to sync: {ex.Message}", Name);
         }
     }
     private void Games_ItemUpdated(object? sender, ItemUpdatedEventArgs<Game> e)
@@ -260,7 +260,7 @@ public class ShortcutsLibrary : LibraryPlugin
                 if (game.TagIds?.Any() == true)
                 {
                     sc.Tags = game.TagIds
-                        .Select(id => API.Instance.Database.Tags.Get(id)?.Name)
+                        .Select(id => PlayniteApi.Database.Tags.Get(id)?.Name)
                         .Where(n => !string.IsNullOrWhiteSpace(n))
                         .Select(n => n!)
                         .Distinct()
