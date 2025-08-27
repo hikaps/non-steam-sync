@@ -84,7 +84,7 @@ public class ShortcutsLibrary : LibraryPlugin
 
     public override ISettings GetSettings(bool firstRunSettings) => settings;
 
-    public override System.Windows.Controls.Control GetSettingsView(bool firstRunSettings)
+    public override System.Windows.Controls.UserControl GetSettingsView(bool firstRunSettings)
     {
         var view = new PluginSettingsView
         {
