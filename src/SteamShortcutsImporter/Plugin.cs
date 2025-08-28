@@ -222,6 +222,23 @@ public class ShortcutsLibrary : LibraryPlugin
                     }
                 }
             };
+            yield return new GameMenuItem
+            {
+                Description = "Remove selected from Steam Shortcuts",
+                MenuSection = "Steam Shortcuts",
+                Action = _ =>
+                {
+                    try
+                    {
+                        RemoveGamesFromSteam(args.Games);
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Error(ex, "Failed to remove selected games from Steam shortcuts.");
+                        PlayniteApi.Dialogs.ShowErrorMessage($"Failed: {ex.Message}", Name);
+                    }
+                }
+            };
         }
     }
 
@@ -558,6 +575,82 @@ public class ShortcutsLibrary : LibraryPlugin
         }
 
         PlayniteApi.Dialogs.ShowMessage($"Added {added}, updated {updated}, skipped {skipped}.", Name);
+    }
+
+    private void RemoveGamesFromSteam(IEnumerable<Game> games)
+    {
+        var vdfPath = ResolveShortcutsVdfPath();
+        if (string.IsNullOrWhiteSpace(vdfPath))
+        {
+            PlayniteApi.Dialogs.ShowErrorMessage("Set a valid Steam library path in settings.", Name);
+            return;
+        }
+
+        var removeList = games?.ToList() ?? new List<Game>();
+        if (removeList.Count == 0) return;
+
+        // Simple confirmation
+        try
+        {
+            var confirm = PlayniteApi.Dialogs.ShowMessage(
+                $"Remove {removeList.Count} selected item(s) from Steam shortcuts?",
+                Name,
+                System.Windows.MessageBoxButton.YesNo);
+            if (confirm != System.Windows.MessageBoxResult.Yes)
+            {
+                return;
+            }
+        }
+        catch { /* older hosts without YesNo overload */ }
+
+        var shortcuts = ShortcutsFile.Read(vdfPath!).ToList();
+        var originalCount = shortcuts.Count;
+
+        // Build a set of shortcuts to remove
+        var toRemove = new HashSet<SteamShortcut>();
+        foreach (var g in removeList)
+        {
+            var action = g.GameActions?.FirstOrDefault(a => a.IsPlayAction) ?? g.GameActions?.FirstOrDefault();
+            var exePath = action != null ? ExpandPathVariables(g, action.Path) ?? string.Empty : string.Empty;
+            if (string.IsNullOrWhiteSpace(exePath))
+            {
+                // Try to fallback to InstallDirectory + Name
+                exePath = g.InstallDirectory ?? string.Empty;
+            }
+
+            // Match strategies: by computed appid; or by name+exe; or by stable id
+            var calcAppId = Utils.GenerateShortcutAppId(exePath, g.Name);
+            var match = shortcuts.FirstOrDefault(s => s.AppId == calcAppId) ??
+                        shortcuts.FirstOrDefault(s => string.Equals(s.AppName, g.Name, StringComparison.OrdinalIgnoreCase) && string.Equals((s.Exe ?? string.Empty).Trim('"'), (exePath ?? string.Empty).Trim('"'), StringComparison.OrdinalIgnoreCase)) ??
+                        shortcuts.FirstOrDefault(s => string.Equals(s.StableId, Utils.HashString($"{exePath}|{g.Name}"), StringComparison.OrdinalIgnoreCase));
+            if (match != null)
+            {
+                toRemove.Add(match);
+            }
+        }
+
+        if (toRemove.Count == 0)
+        {
+            PlayniteApi.Dialogs.ShowMessage("No matching Steam shortcuts found to remove.", Name);
+            return;
+        }
+
+        // Remove from list
+        shortcuts.RemoveAll(s => toRemove.Contains(s));
+        ShortcutsFile.Write(vdfPath!, shortcuts);
+
+        // Delete artwork files for removed shortcuts
+        var gridDir = TryGetGridDirFromVdf(vdfPath!);
+        if (!string.IsNullOrEmpty(gridDir) && Directory.Exists(gridDir))
+        {
+            foreach (var s in toRemove)
+            {
+                TryDeleteGridArtwork(s.AppId, gridDir!);
+            }
+        }
+
+        var removed = originalCount - shortcuts.Count;
+        PlayniteApi.Dialogs.ShowMessage($"Removed {removed} shortcut(s) from Steam.", Name);
     }
 
     private class Candidate
@@ -1104,6 +1197,34 @@ public class ShortcutsLibrary : LibraryPlugin
         catch (Exception ex)
         {
             Logger.Warn(ex, $"Failed importing artwork from grid for appId={appId}");
+        }
+    }
+
+    private void TryDeleteGridArtwork(uint appId, string gridDir)
+    {
+        if (appId == 0 || string.IsNullOrEmpty(gridDir) || !Directory.Exists(gridDir)) return;
+        try
+        {
+            var patterns = new[]
+            {
+                appId + ".*",
+                appId + "p.*",
+                appId + "_icon.*",
+                appId + "_hero.*"
+            };
+            foreach (var pat in patterns)
+            {
+                string[] files;
+                try { files = Directory.GetFiles(gridDir, pat); } catch { continue; }
+                foreach (var f in files)
+                {
+                    try { File.Delete(f); } catch { }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn(ex, $"Failed deleting grid artwork for appId={appId}");
         }
     }
 }
