@@ -99,6 +99,18 @@ public class PluginSettings : ISettings
                     return c!;
                 }
             }
+
+            // Explicit fallbacks to common locations on C:
+            var fallback1 = @"C:\\Program Files (x86)\\Steam";
+            if (Directory.Exists(fallback1))
+            {
+                return fallback1;
+            }
+            var fallback2 = @"C:\\Program Files\\Steam";
+            if (Directory.Exists(fallback2))
+            {
+                return fallback2;
+            }
         }
         catch
         {
@@ -183,13 +195,13 @@ public class ShortcutsLibrary : LibraryPlugin
     {
         yield return new MainMenuItem
         {
-            Description = "Steam Shortcuts: Import…",
+            Description = "Steam Shortcuts: Sync Steam → Playnite…",
             MenuSection = "@Steam Shortcuts",
             Action = _ => { ShowImportDialog(); }
         };
         yield return new MainMenuItem
         {
-            Description = "Steam Shortcuts: Add Playnite Games…",
+            Description = "Steam Shortcuts: Sync Playnite → Steam…",
             MenuSection = "@Steam Shortcuts",
             Action = _ => { ShowAddToSteamDialog(); }
         };
