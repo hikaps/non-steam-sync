@@ -205,59 +205,12 @@ public class ShortcutsLibrary : LibraryPlugin
             MenuSection = "@Steam Shortcuts",
             Action = _ => { ShowAddToSteamDialog(); }
         };
-        yield return new MainMenuItem
-        {
-            Description = "Steam Shortcuts: Sync Back",
-            MenuSection = "@Steam Shortcuts",
-            Action = _ => { SyncBackAll(); }
-        };
-        yield return new MainMenuItem
-        {
-            Description = "Steam Shortcuts: Clean Duplicates…",
-            MenuSection = "@Steam Shortcuts",
-            Action = _ => { ShowCleanDuplicatesDialog(); }
-        };
     }
 
     public override IEnumerable<GameMenuItem> GetGameMenuItems(GetGameMenuItemsArgs args)
     {
-        if (args.Games?.Any() == true)
-        {
-            yield return new GameMenuItem
-            {
-                Description = "Add selected to Steam Shortcuts",
-                MenuSection = "Steam Shortcuts",
-                Action = _ =>
-                {
-                    try
-                    {
-                        AddGamesToSteam(args.Games);
-                    }
-                    catch (Exception ex)
-                    {
-                        Logger.Error(ex, "Failed to add selected games to Steam shortcuts from context menu.");
-                        PlayniteApi.Dialogs.ShowErrorMessage($"Failed: {ex.Message}", Name);
-                    }
-                }
-            };
-            yield return new GameMenuItem
-            {
-                Description = "Remove selected from Steam Shortcuts",
-                MenuSection = "Steam Shortcuts",
-                Action = _ =>
-                {
-                    try
-                    {
-                        RemoveGamesFromSteam(args.Games);
-                    }
-                    catch (Exception ex)
-                    {
-                        Logger.Error(ex, "Failed to remove selected games from Steam shortcuts.");
-                        PlayniteApi.Dialogs.ShowErrorMessage($"Failed: {ex.Message}", Name);
-                    }
-                }
-            };
-        }
+        // Simplified UX: no per-game context actions, use the two main sync flows.
+        yield break;
     }
 
     public override IEnumerable<GameMetadata> GetGames(LibraryGetGamesArgs args)
