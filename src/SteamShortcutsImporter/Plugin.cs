@@ -257,12 +257,26 @@ public class ShortcutsLibrary : LibraryPlugin
             var shortcuts = ShortcutsFile.Read(vdfPath!);
 
             var metas = new List<GameMetadata>();
+            var seenIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var sc in shortcuts)
             {
+                // Prefer using existing DB game's GameId when we can match this shortcut,
+                // to avoid duplicates if ID logic changes over time.
+                var existing = FindExistingGameForShortcut(sc);
+                var chosenId = existing?.GameId ?? (!string.IsNullOrEmpty(sc.StableId) ? sc.StableId : sc.AppId.ToString());
+                if (string.IsNullOrEmpty(chosenId))
+                {
+                    chosenId = Utils.HashString($"{sc.Exe}|{sc.AppName}");
+                }
+                if (seenIds.Contains(chosenId))
+                {
+                    continue; // de-dup within a single import pass
+                }
+
                 var meta = new GameMetadata
                 {
                     Name = sc.AppName,
-                    GameId = sc.StableId,
+                    GameId = chosenId,
                     InstallDirectory = string.IsNullOrEmpty(sc.StartDir) ? null : sc.StartDir,
                     Platforms = new HashSet<MetadataProperty> { new MetadataNameProperty("Windows") },
                     Tags = new HashSet<MetadataProperty>((sc.Tags ?? Enumerable.Empty<string>())
@@ -275,6 +289,7 @@ public class ShortcutsLibrary : LibraryPlugin
                 meta.GameActions = new List<GameAction> { BuildPlayAction(sc) };
 
                 metas.Add(meta);
+                seenIds.Add(chosenId);
             }
 
             Logger.Info($"Imported {metas.Count} shortcuts as games.");
@@ -285,6 +300,45 @@ public class ShortcutsLibrary : LibraryPlugin
             Logger.Error(ex, "Failed to read shortcuts.vdf");
             return Enumerable.Empty<GameMetadata>();
         }
+    }
+
+    private Game? FindExistingGameForShortcut(SteamShortcut sc)
+    {
+        try
+        {
+            // by prior stable id
+            if (!string.IsNullOrEmpty(sc.StableId))
+            {
+                var g = PlayniteApi.Database.Games.FirstOrDefault(x => x.PluginId == Id && string.Equals(x.GameId, sc.StableId, StringComparison.OrdinalIgnoreCase));
+                if (g != null) return g;
+            }
+            // by appid string
+            if (sc.AppId != 0)
+            {
+                var idStr = sc.AppId.ToString();
+                var g = PlayniteApi.Database.Games.FirstOrDefault(x => x.PluginId == Id && string.Equals(x.GameId, idStr, StringComparison.OrdinalIgnoreCase));
+                if (g != null) return g;
+            }
+            // by name + play action exe
+            var byName = PlayniteApi.Database.Games.Where(x => x.PluginId == Id && string.Equals(x.Name, sc.AppName, StringComparison.OrdinalIgnoreCase));
+            foreach (var g in byName)
+            {
+                var act = g.GameActions?.FirstOrDefault(a => a.IsPlayAction) ?? g.GameActions?.FirstOrDefault();
+                if (act != null && act.Type == GameActionType.File)
+                {
+                    var exe = (act.Path ?? string.Empty).Trim('"');
+                    if (string.Equals(exe, (sc.Exe ?? string.Empty).Trim('"'), StringComparison.OrdinalIgnoreCase))
+                    {
+                        return g;
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn(ex, "Failed during existing game lookup.");
+        }
+        return null;
     }
 
     private GameAction BuildPlayAction(SteamShortcut sc)
@@ -876,6 +930,7 @@ public class ShortcutsLibrary : LibraryPlugin
             foreach (var game in games)
             {
                 var sc = shortcuts.FirstOrDefault(s => s.StableId == game.GameId) ??
+                         shortcuts.FirstOrDefault(s => s.AppId != 0 && string.Equals(s.AppId.ToString(), game.GameId, StringComparison.OrdinalIgnoreCase)) ??
                          shortcuts.FirstOrDefault(s => string.Equals(s.AppName, game.Name, StringComparison.OrdinalIgnoreCase));
                 if (sc == null)
                 {
@@ -956,6 +1011,7 @@ public class ShortcutsLibrary : LibraryPlugin
 
                 // Match by our stable id or by name+exe
                 var sc = shortcuts.FirstOrDefault(s => s.StableId == game.GameId) ??
+                         shortcuts.FirstOrDefault(s => s.AppId != 0 && string.Equals(s.AppId.ToString(), game.GameId, StringComparison.OrdinalIgnoreCase)) ??
                          shortcuts.FirstOrDefault(s => string.Equals(s.AppName, game.Name, StringComparison.OrdinalIgnoreCase));
 
                 if (sc == null)
