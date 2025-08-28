@@ -258,6 +258,33 @@ public class ShortcutsLibrary : LibraryPlugin
         };
     }
 
+    private void EnsureSteamPlayAction(Game game, SteamShortcut sc)
+    {
+        try
+        {
+            if (sc.AppId == 0)
+            {
+                return;
+            }
+
+            var expectedUrl = $"steam://rungameid/{sc.AppId}";
+            var current = game.GameActions?.FirstOrDefault(a => a.IsPlayAction);
+            var needsUpdate = current == null || current.Type != GameActionType.URL || !string.Equals(current.Path, expectedUrl, StringComparison.OrdinalIgnoreCase);
+
+            if (needsUpdate)
+            {
+                var updated = game.GetClone();
+                updated.IsInstalled = true;
+                updated.GameActions = new System.Collections.ObjectModel.ObservableCollection<GameAction>(new[] { BuildPlayAction(sc) });
+                PlayniteApi.Database.Games.Update(updated);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn(ex, $"Failed to ensure Steam play action for game '{game.Name}'");
+        }
+    }
+
     private void ForceImport()
     {
         // Triggers Playnite to refresh this library by calling GetGames again.
@@ -504,6 +531,9 @@ public class ShortcutsLibrary : LibraryPlugin
                     sc.AppId = Utils.GenerateShortcutAppId(sc.Exe, sc.AppName);
                 }
 
+                // Ensure Play action in Playnite uses Steam when possible
+                EnsureSteamPlayAction(game, sc);
+
                 // Sync artwork from Playnite to Steam grid
                 var gridDir = TryGetGridDirFromVdf(vdfPath!);
                 TryExportArtworkToGrid(game, sc.AppId, gridDir);
@@ -582,6 +612,9 @@ public class ShortcutsLibrary : LibraryPlugin
                 {
                     sc.AppId = Utils.GenerateShortcutAppId(sc.Exe, sc.AppName);
                 }
+
+                // Ensure Play action in Playnite uses Steam when possible
+                EnsureSteamPlayAction(game, sc);
 
                 // Sync artwork to grid
                 var gridDir = TryGetGridDirFromVdf(vdfPath!);
