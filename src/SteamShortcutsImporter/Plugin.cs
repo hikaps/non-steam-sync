@@ -273,10 +273,9 @@ public class ShortcutsLibrary : LibraryPlugin
 
             if (needsUpdate)
             {
-                var updated = game.GetClone();
-                updated.IsInstalled = true;
-                updated.GameActions = new System.Collections.ObjectModel.ObservableCollection<GameAction>(new[] { BuildPlayAction(sc) });
-                PlayniteApi.Database.Games.Update(updated);
+                game.IsInstalled = true;
+                game.GameActions = new System.Collections.ObjectModel.ObservableCollection<GameAction>(new[] { BuildPlayAction(sc) });
+                PlayniteApi.Database.Games.Update(game);
             }
         }
         catch (Exception ex)

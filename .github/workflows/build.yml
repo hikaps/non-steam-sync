@@ -36,8 +36,8 @@ jobs:
           name: SteamShortcutsImporter.pext
           path: SteamShortcutsImporter.pext
 
-  cli-ubuntu:
-    name: Build CLI (Ubuntu)
+  tests-ubuntu:
+    name: Parser tests (Ubuntu)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -46,11 +46,12 @@ jobs:
         with:
           dotnet-version: '6.x'
       - name: Restore
-        run: dotnet restore tools/ShortcutsCli/ShortcutsCli.csproj
-      - name: Build
-        run: dotnet build tools/ShortcutsCli/ShortcutsCli.csproj -c Release
-      - name: Upload artifact
+        run: dotnet restore tests/ShortcutsTests/ShortcutsTests.csproj
+      - name: Test
+        run: dotnet test tests/ShortcutsTests/ShortcutsTests.csproj -c Release --logger "trx;LogFileName=test_results.trx"
+      - name: Upload test results
         uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: ShortcutsCli
-          path: tools/ShortcutsCli/bin/Release/net6.0/**
+          name: test-results
+          path: tests/ShortcutsTests/TestResults/**
