@@ -1165,6 +1165,10 @@ public class ShortcutsLibrary : LibraryPlugin
         try
         {
             var result = input;
+            if (result == null)
+            {
+                result = string.Empty;
+            }
             // Replace Playnite placeholders we use: {InstallDir}
             if (!string.IsNullOrEmpty(game.InstallDirectory))
             {
@@ -1409,7 +1413,10 @@ public class ShortcutsLibrary : LibraryPlugin
                     {
                         window.DialogResult = true; window.Close(); return;
                     }
-                    PlayniteApi.Database.Games.Remove(toRemove.Select(g => g.Id).ToList());
+                    foreach (var g in toRemove)
+                    {
+                        PlayniteApi.Database.Games.Remove(g.Id);
+                    }
                     PlayniteApi.Dialogs.ShowMessage($"Removed {toRemove.Count} duplicate(s).", Name);
                     window.DialogResult = true; window.Close();
                 }
