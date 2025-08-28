@@ -199,6 +199,12 @@ public class ShortcutsLibrary : LibraryPlugin
             MenuSection = "@Steam Shortcuts",
             Action = _ => { SyncBackAll(); }
         };
+        yield return new MainMenuItem
+        {
+            Description = "Steam Shortcuts: Clean Duplicates…",
+            MenuSection = "@Steam Shortcuts",
+            Action = _ => { ShowCleanDuplicatesDialog(); }
+        };
     }
 
     public override IEnumerable<GameMenuItem> GetGameMenuItems(GetGameMenuItemsArgs args)
@@ -1282,5 +1288,151 @@ public class ShortcutsLibrary : LibraryPlugin
         {
             Logger.Warn(ex, $"Failed deleting grid artwork for appId={appId}");
         }
+    }
+
+    private void ShowCleanDuplicatesDialog()
+    {
+        try
+        {
+            var games = PlayniteApi.Database.Games.Where(g => g.PluginId == Id).ToList();
+            if (games.Count == 0)
+            {
+                PlayniteApi.Dialogs.ShowMessage("No games from this extension found.", Name);
+                return;
+            }
+
+            // Build candidates keyed by derived appid (exe+name)
+            var cands = new List<DupCandidate>();
+            foreach (var g in games)
+            {
+                var act = g.GameActions?.FirstOrDefault(a => a.IsPlayAction) ?? g.GameActions?.FirstOrDefault();
+                if (act == null)
+                {
+                    continue;
+                }
+                string exe = string.Empty;
+                if (act.Type == GameActionType.File)
+                {
+                    exe = ExpandPathVariables(g, act.Path) ?? string.Empty;
+                }
+                else if (act.Type == GameActionType.URL && !string.IsNullOrEmpty(g.GameId))
+                {
+                    // If URL, try to compute exe-less grouping using name only (rare)
+                    exe = string.Empty;
+                }
+                var appId = Utils.GenerateShortcutAppId(exe, g.Name);
+                var summary = string.IsNullOrEmpty(exe) ? g.Name : ($"{g.Name} — {exe}");
+                cands.Add(new DupCandidate { Game = g, Summary = summary, AppId = appId });
+            }
+
+            var groups = cands
+                .GroupBy(c => c.AppId)
+                .Where(g => g.Count() > 1)
+                .OrderByDescending(g => g.Count())
+                .ToList();
+
+            if (groups.Count == 0)
+            {
+                PlayniteApi.Dialogs.ShowMessage("No duplicates detected.", Name);
+                return;
+            }
+
+            var window = PlayniteApi.Dialogs.CreateWindow(new WindowCreationOptions { ShowCloseButton = true });
+            window.Title = "Steam Shortcuts — Clean Duplicates";
+            window.Width = 900;
+            window.Height = 650;
+
+            var grid = new System.Windows.Controls.Grid();
+            grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = new System.Windows.GridLength(1, System.Windows.GridUnitType.Star) });
+            grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = System.Windows.GridLength.Auto });
+
+            var topBar = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, Margin = new System.Windows.Thickness(8, 8, 8, 0) };
+            var btnSelectAll = new System.Windows.Controls.Button { Content = "Select All Duplicates", Margin = new System.Windows.Thickness(0, 0, 8, 0) };
+            var btnDeselectAll = new System.Windows.Controls.Button { Content = "Deselect All" };
+            topBar.Children.Add(btnSelectAll);
+            topBar.Children.Add(btnDeselectAll);
+
+            var listHost = new System.Windows.Controls.StackPanel();
+            listHost.Children.Add(topBar);
+            var listPanel = new System.Windows.Controls.StackPanel { Margin = new System.Windows.Thickness(8) };
+            var scroll = new System.Windows.Controls.ScrollViewer { Content = listPanel, VerticalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto };
+            listHost.Children.Add(scroll);
+            System.Windows.Controls.Grid.SetRow(listHost, 0);
+            grid.Children.Add(listHost);
+
+            var bottom = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, Margin = new System.Windows.Thickness(8), HorizontalAlignment = System.Windows.HorizontalAlignment.Right };
+            var btnRemove = new System.Windows.Controls.Button { Content = "Remove Selected", Margin = new System.Windows.Thickness(0, 0, 8, 0) };
+            var btnCancel = new System.Windows.Controls.Button { Content = "Cancel" };
+            bottom.Children.Add(btnRemove);
+            bottom.Children.Add(btnCancel);
+            System.Windows.Controls.Grid.SetRow(bottom, 1);
+            grid.Children.Add(bottom);
+
+            window.Content = grid;
+
+            // Build UI groups
+            var allChecks = new List<System.Windows.Controls.CheckBox>();
+            foreach (var grp in groups)
+            {
+                var grpHeader = new System.Windows.Controls.TextBlock
+                {
+                    Text = $"Possible duplicates ({grp.Count()}): {grp.First().Summary}",
+                    FontWeight = System.Windows.FontWeights.Bold,
+                    Margin = new System.Windows.Thickness(0, 8, 0, 4)
+                };
+                listPanel.Children.Add(grpHeader);
+
+                bool first = true;
+                foreach (var cand in grp)
+                {
+                    var cb = new System.Windows.Controls.CheckBox
+                    {
+                        Content = cand.Summary + $"  (ID: {cand.Game.Id})",
+                        IsChecked = !first, // keep the first by default, mark others for removal
+                        Tag = cand
+                    };
+                    first = false;
+                    allChecks.Add(cb);
+                    listPanel.Children.Add(cb);
+                }
+            }
+
+            btnSelectAll.Click += (_, __) => { foreach (var c in allChecks) c.IsChecked = true; };
+            btnDeselectAll.Click += (_, __) => { foreach (var c in allChecks) c.IsChecked = false; };
+            btnCancel.Click += (_, __) => { window.DialogResult = false; window.Close(); };
+            btnRemove.Click += (_, __) =>
+            {
+                try
+                {
+                    var toRemove = allChecks.Where(c => c.IsChecked == true).Select(c => ((DupCandidate)c.Tag).Game).Distinct().ToList();
+                    if (toRemove.Count == 0)
+                    {
+                        window.DialogResult = true; window.Close(); return;
+                    }
+                    PlayniteApi.Database.Games.Remove(toRemove.Select(g => g.Id).ToList());
+                    PlayniteApi.Dialogs.ShowMessage($"Removed {toRemove.Count} duplicate(s).", Name);
+                    window.DialogResult = true; window.Close();
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error(ex, "Failed to remove duplicates");
+                    PlayniteApi.Dialogs.ShowErrorMessage($"Failed: {ex.Message}", Name);
+                }
+            };
+
+            window.ShowDialog();
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex, "Clean duplicates dialog error");
+            PlayniteApi.Dialogs.ShowErrorMessage($"Failed to open dialog: {ex.Message}", Name);
+        }
+    }
+
+    private class DupCandidate
+    {
+        public Game Game { get; set; } = default!;
+        public string Summary { get; set; } = string.Empty;
+        public uint AppId { get; set; }
     }
 }
