@@ -150,10 +150,20 @@ public static class ShortcutsFile
 
     private static Dictionary<string, object> ToObject(SteamShortcut sc)
     {
+        // Ensure exe is quoted for spaces, Steam expects quoted path
+        var exeOut = sc.Exe ?? string.Empty;
+        if (!string.IsNullOrWhiteSpace(exeOut))
+        {
+            // if not already quoted, and contains space or colon+backslash pattern, quote it
+            if (!(exeOut.Length >= 2 && exeOut[0] == '"' && exeOut[exeOut.Length - 1] == '"'))
+            {
+                exeOut = "\"" + exeOut + "\"";
+            }
+        }
         var dict = new Dictionary<string, object>
         {
             ["appname"] = sc.AppName ?? string.Empty,
-            ["exe"] = sc.Exe ?? string.Empty,
+            ["exe"] = exeOut,
             ["StartDir"] = sc.StartDir ?? string.Empty,
             ["icon"] = sc.Icon ?? string.Empty,
             ["ShortcutPath"] = sc.ShortcutPath ?? string.Empty,
