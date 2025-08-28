@@ -118,7 +118,7 @@ public class PluginSettingsView : System.Windows.Controls.UserControl
             new System.Windows.Data.Binding("SteamRootPath") { Mode = System.Windows.Data.BindingMode.TwoWay });
 
         var panel = new System.Windows.Controls.StackPanel();
-        panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Steam library path (e.g., C\\\Program Files (x86)\\\Steam):" });
+        panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Steam library path (e.g., C\\\\Program Files (x86)\\\\Steam):" });
         panel.Children.Add(pathBox);
         var launchCheck = new System.Windows.Controls.CheckBox { Content = "Launch via Steam (rungameid) when possible" };
         launchCheck.SetBinding(System.Windows.Controls.Primitives.ToggleButton.IsCheckedProperty,
