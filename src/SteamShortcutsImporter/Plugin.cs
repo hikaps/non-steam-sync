@@ -423,7 +423,7 @@ public class ShortcutsLibrary : LibraryPlugin
                                     foreach (var g in newGames)
                                     {
                                         var appId = selected.First(s => s.StableId == g.GameId).AppId;
-                                        TryImportArtworkFromGrid(g, appId, gridDir);
+                                        TryImportArtworkFromGrid(g, appId, gridDir!);
                                     }
                                 }
                             }
@@ -736,9 +736,9 @@ public class ShortcutsLibrary : LibraryPlugin
             var cv = Pick(poster.Length > 0 ? poster : cover);
 
             // Assign paths into Playnite DB storage
-            if (!string.IsNullOrEmpty(bg)) game.BackgroundImage = PlayniteApi.Database.AddFile(bg);
-            if (!string.IsNullOrEmpty(ic)) game.Icon = PlayniteApi.Database.AddFile(ic);
-            if (!string.IsNullOrEmpty(cv)) game.CoverImage = PlayniteApi.Database.AddFile(cv);
+            if (!string.IsNullOrEmpty(bg)) game.BackgroundImage = PlayniteApi.Database.AddFile(bg, game.Id);
+            if (!string.IsNullOrEmpty(ic)) game.Icon = PlayniteApi.Database.AddFile(ic, game.Id);
+            if (!string.IsNullOrEmpty(cv)) game.CoverImage = PlayniteApi.Database.AddFile(cv, game.Id);
 
             PlayniteApi.Database.Games.Update(game);
         }
