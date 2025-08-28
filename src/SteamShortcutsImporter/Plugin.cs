@@ -143,14 +143,15 @@ public class PluginSettingsView : System.Windows.Controls.UserControl
         var excludeBox = new System.Windows.Controls.TextBox { MinWidth = 400 };
         excludeBox.SetBinding(System.Windows.Controls.TextBox.TextProperty, new System.Windows.Data.Binding("ExcludeExePatterns") { Mode = System.Windows.Data.BindingMode.TwoWay });
 
-        var panel = new System.Windows.Controls.StackPanel();
-        panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Steam library path (e.g., C\\\\Program Files (x86)\\\\Steam):" });
+        var panel = new System.Windows.Controls.StackPanel { Margin = new System.Windows.Thickness(12) };
+        panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Steam library path (e.g., C\\\\Program Files (x86)\\\\Steam):", FontWeight = System.Windows.FontWeights.Bold });
         panel.Children.Add(pathBox);
-        panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Folders to scan (one per line):" });
+        panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Folders to scan (one per line):", Margin = new System.Windows.Thickness(0,8,0,0), FontWeight = System.Windows.FontWeights.Bold });
         panel.Children.Add(scanBox);
-        panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Exclude exe name fragments (semicolon separated):" });
+        panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Exclude exe name fragments (semicolon separated):", Margin = new System.Windows.Thickness(0,8,0,0), FontWeight = System.Windows.FontWeights.Bold });
         panel.Children.Add(excludeBox);
-        var launchCheck = new System.Windows.Controls.CheckBox { Content = "Launch via Steam (rungameid) when possible" };
+        panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Examples: 'unins;installer;setup;updater'", Margin = new System.Windows.Thickness(0,2,0,6), Opacity = 0.8 });
+        var launchCheck = new System.Windows.Controls.CheckBox { Content = "Launch via Steam (rungameid) when possible", Margin = new System.Windows.Thickness(0,8,0,0) };
         launchCheck.SetBinding(System.Windows.Controls.Primitives.ToggleButton.IsCheckedProperty,
             new System.Windows.Data.Binding("LaunchViaSteam") { Mode = System.Windows.Data.BindingMode.TwoWay });
         panel.Children.Add(launchCheck);
@@ -401,30 +402,38 @@ public class ShortcutsLibrary : LibraryPlugin
             var shortcuts = ShortcutsFile.Read(vdfPath!).ToList();
 
             var window = PlayniteApi.Dialogs.CreateWindow(new WindowCreationOptions { ShowCloseButton = true });
-            window.Title = "Steam Shortcuts — Add Playnite Games";
+            window.Title = "Steam Shortcuts — Select Items to Import";
             window.Width = 900;
             window.Height = 650;
+            window.MinWidth = 720;
+            window.MinHeight = 480;
 
             var grid = new System.Windows.Controls.Grid();
             grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = new System.Windows.GridLength(1, System.Windows.GridUnitType.Star) });
             grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = System.Windows.GridLength.Auto });
 
-            // Simple filter box (WPF TextBox has no PlaceholderText on net462)
-            var searchLabel = new System.Windows.Controls.TextBlock { Text = "Filter games:", Margin = new System.Windows.Thickness(8,8,8,0) };
-            var searchBar = new System.Windows.Controls.TextBox { Margin = new System.Windows.Thickness(8,0,8,8) };
-            var listPanel = new System.Windows.Controls.StackPanel { Margin = new System.Windows.Thickness(8) };
+            // Unified top bar with filter and select buttons
+            var topBar = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, Margin = new System.Windows.Thickness(12,12,12,6) };
+            var searchLabel = new System.Windows.Controls.TextBlock { Text = "Filter games:", Margin = new System.Windows.Thickness(0,0,8,0), VerticalAlignment = System.Windows.VerticalAlignment.Center };
+            var searchBar = new System.Windows.Controls.TextBox { Width = 320, Margin = new System.Windows.Thickness(0,0,16,0) };
+            var btnSelectAll = new System.Windows.Controls.Button { Content = "Select All", Margin = new System.Windows.Thickness(0,0,8,0), MinWidth = 100 };
+            var btnSelectNone = new System.Windows.Controls.Button { Content = "Deselect All", MinWidth = 100 };
+            topBar.Children.Add(searchLabel);
+            topBar.Children.Add(searchBar);
+            topBar.Children.Add(btnSelectAll);
+            topBar.Children.Add(btnSelectNone);
+            var listPanel = new System.Windows.Controls.StackPanel { Margin = new System.Windows.Thickness(12,0,12,0) };
             var scroll = new System.Windows.Controls.ScrollViewer { Content = listPanel, VerticalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto };
 
             var container = new System.Windows.Controls.StackPanel();
-            container.Children.Add(searchLabel);
-            container.Children.Add(searchBar);
+            container.Children.Add(topBar);
             container.Children.Add(scroll);
             System.Windows.Controls.Grid.SetRow(container, 0);
             grid.Children.Add(container);
 
-            var bottom = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, Margin = new System.Windows.Thickness(8), HorizontalAlignment = System.Windows.HorizontalAlignment.Right };
-            var importBtn = new System.Windows.Controls.Button { Content = "Import", Margin = new System.Windows.Thickness(0, 0, 8, 0) };
-            var cancelBtn = new System.Windows.Controls.Button { Content = "Cancel" };
+            var bottom = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, Margin = new System.Windows.Thickness(12,6,12,12), HorizontalAlignment = System.Windows.HorizontalAlignment.Right };
+            var importBtn = new System.Windows.Controls.Button { Content = "Import", Margin = new System.Windows.Thickness(0, 0, 8, 0), MinWidth = 100 };
+            var cancelBtn = new System.Windows.Controls.Button { Content = "Cancel", MinWidth = 100 };
             bottom.Children.Add(importBtn);
             bottom.Children.Add(cancelBtn);
             System.Windows.Controls.Grid.SetRow(bottom, 1);
@@ -475,6 +484,8 @@ public class ShortcutsLibrary : LibraryPlugin
                 }
             }
 
+            btnSelectAll.Click += (_, __) => { foreach (var c in entries) c.IsChecked = true; };
+            btnSelectNone.Click += (_, __) => { foreach (var c in entries) c.IsChecked = false; };
             searchBar.TextChanged += (_, __) => RefreshList();
             RefreshList();
 
@@ -967,16 +978,18 @@ public class ShortcutsLibrary : LibraryPlugin
             window.Title = "Steam Shortcuts — Select Items to Import";
             window.Width = 900;
             window.Height = 650;
+            window.MinWidth = 720;
+            window.MinHeight = 480;
 
             var grid = new System.Windows.Controls.Grid();
             grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = new System.Windows.GridLength(1, System.Windows.GridUnitType.Star) });
             grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = System.Windows.GridLength.Auto });
 
-            var topBar = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, Margin = new System.Windows.Thickness(8, 8, 8, 0) };
-            var lblFilter = new System.Windows.Controls.TextBlock { Text = "Filter games:", Margin = new System.Windows.Thickness(0, 0, 8, 0) };
-            var searchBar = new System.Windows.Controls.TextBox { Width = 300, Margin = new System.Windows.Thickness(0, 0, 16, 0) };
-            var btnSelectAll = new System.Windows.Controls.Button { Content = "Select All", Margin = new System.Windows.Thickness(0, 0, 8, 0) };
-            var btnSelectNone = new System.Windows.Controls.Button { Content = "Deselect All" };
+            var topBar = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, Margin = new System.Windows.Thickness(12, 12, 12, 6) };
+            var lblFilter = new System.Windows.Controls.TextBlock { Text = "Filter games:", Margin = new System.Windows.Thickness(0, 0, 8, 0), VerticalAlignment = System.Windows.VerticalAlignment.Center };
+            var searchBar = new System.Windows.Controls.TextBox { Width = 320, Margin = new System.Windows.Thickness(0, 0, 16, 0) };
+            var btnSelectAll = new System.Windows.Controls.Button { Content = "Select All", Margin = new System.Windows.Thickness(0, 0, 8, 0), MinWidth = 100 };
+            var btnSelectNone = new System.Windows.Controls.Button { Content = "Deselect All", MinWidth = 100 };
             topBar.Children.Add(lblFilter);
             topBar.Children.Add(searchBar);
             topBar.Children.Add(btnSelectAll);
@@ -984,15 +997,15 @@ public class ShortcutsLibrary : LibraryPlugin
 
             var listHost = new System.Windows.Controls.StackPanel();
             listHost.Children.Add(topBar);
-            var listPanel = new System.Windows.Controls.StackPanel { Margin = new System.Windows.Thickness(8) };
+            var listPanel = new System.Windows.Controls.StackPanel { Margin = new System.Windows.Thickness(12, 0, 12, 0) };
             var scroll = new System.Windows.Controls.ScrollViewer { Content = listPanel, VerticalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto };
             listHost.Children.Add(scroll);
             System.Windows.Controls.Grid.SetRow(listHost, 0);
             grid.Children.Add(listHost);
 
-            var bottomBar = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, Margin = new System.Windows.Thickness(8), HorizontalAlignment = System.Windows.HorizontalAlignment.Right };
-            var btnImport = new System.Windows.Controls.Button { Content = "Import", Margin = new System.Windows.Thickness(0, 0, 8, 0) };
-            var btnCancel = new System.Windows.Controls.Button { Content = "Cancel" };
+            var bottomBar = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, Margin = new System.Windows.Thickness(12, 6, 12, 12), HorizontalAlignment = System.Windows.HorizontalAlignment.Right };
+            var btnImport = new System.Windows.Controls.Button { Content = "Import", Margin = new System.Windows.Thickness(0, 0, 8, 0), MinWidth = 100 };
+            var btnCancel = new System.Windows.Controls.Button { Content = "Cancel", MinWidth = 100 };
             bottomBar.Children.Add(btnImport);
             bottomBar.Children.Add(btnCancel);
             System.Windows.Controls.Grid.SetRow(bottomBar, 1);
