@@ -344,15 +344,28 @@ public class ShortcutsLibrary : LibraryPlugin
     {
         try
         {
-            // by play action exe match across all games
+            // by Name + Play action across all games (File or Steam URL)
             var byName = PlayniteApi.Database.Games.Where(x => string.Equals(x.Name, sc.AppName, StringComparison.OrdinalIgnoreCase));
+            var appId = sc.AppId != 0 ? sc.AppId : Utils.GenerateShortcutAppId(sc.Exe ?? string.Empty, sc.AppName ?? string.Empty);
+            var expectedUrl = appId != 0 ? $"steam://rungameid/{Utils.ToShortcutGameId(appId)}" : null;
             foreach (var g in byName)
             {
                 var act = g.GameActions?.FirstOrDefault(a => a.IsPlayAction) ?? g.GameActions?.FirstOrDefault();
-                if (act != null && act.Type == GameActionType.File)
+                if (act == null)
+                {
+                    continue;
+                }
+                if (act.Type == GameActionType.File)
                 {
                     var exe = (act.Path ?? string.Empty).Trim('"');
                     if (string.Equals(exe, (sc.Exe ?? string.Empty).Trim('"'), StringComparison.OrdinalIgnoreCase))
+                    {
+                        return g;
+                    }
+                }
+                else if (act.Type == GameActionType.URL && !string.IsNullOrEmpty(expectedUrl))
+                {
+                    if (string.Equals(act.Path ?? string.Empty, expectedUrl, StringComparison.OrdinalIgnoreCase))
                     {
                         return g;
                     }
@@ -661,7 +674,7 @@ public class ShortcutsLibrary : LibraryPlugin
                 var inPn = FindAnyExistingGameForShortcut(new SteamShortcut { AppName = c.Name, Exe = c.Exe }) != null;
                 var summary = $"{c.Name} — {c.Exe}" + (inSteam ? " [Steam]" : "") + (inPn ? " [Playnite]" : "");
                 var payload = new ScanPayload { Name = c.Name, Exe = c.Exe, StartDir = c.StartDir, AppId = appId };
-                var cb = new System.Windows.Controls.CheckBox { Content = summary, IsChecked = !(inSteam && inPn), Tag = payload };
+                var cb = new System.Windows.Controls.CheckBox { Content = summary, IsChecked = !(inSteam && inPn), Tag = payload, Margin = new System.Windows.Thickness(0,4,0,4) };
                 checks.Add(cb);
                 listPanel.Children.Add(cb);
             }
