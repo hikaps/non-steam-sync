@@ -17,6 +17,10 @@ public class PluginSettings : ISettings
     public string SteamRootPath { get; set; } = string.Empty;
     // If true, configure Play actions to launch via Steam rungameid.
     public bool LaunchViaSteam { get; set; } = true;
+    // Newline-separated list of folders to scan recursively for games
+    public string ScanFolders { get; set; } = string.Empty;
+    // Semicolon separated fragments to exclude from exe filenames (case-insensitive)
+    public string ExcludeExePatterns { get; set; } = "unins;installer;setup;updater;crash;config;launcher;unitycrashhandler;vcredist;vc_redist;dotnet;dxsetup;vulkanrt;redist";
 
     // Persisted settings copy
     public void BeginEdit() { }
@@ -53,12 +57,15 @@ public class PluginSettings : ISettings
             {
                 SteamRootPath = saved.SteamRootPath;
                 LaunchViaSteam = saved.LaunchViaSteam;
+                ScanFolders = saved.ScanFolders;
+                ExcludeExePatterns = string.IsNullOrWhiteSpace(saved.ExcludeExePatterns) ? ExcludeExePatterns : saved.ExcludeExePatterns;
             }
             else
             {
                 // Try to prefill with a sensible default
                 SteamRootPath = GuessSteamRootPath() ?? string.Empty;
                 LaunchViaSteam = true;
+                ScanFolders = string.Empty;
             }
         }
         catch (Exception ex)
@@ -66,6 +73,7 @@ public class PluginSettings : ISettings
             LogManager.GetLogger().Error(ex, "Failed to load saved settings, falling back to defaults.");
             SteamRootPath = GuessSteamRootPath() ?? string.Empty;
             LaunchViaSteam = true;
+            ScanFolders = string.Empty;
         }
     }
 
@@ -129,9 +137,19 @@ public class PluginSettingsView : System.Windows.Controls.UserControl
         pathBox.SetBinding(System.Windows.Controls.TextBox.TextProperty,
             new System.Windows.Data.Binding("SteamRootPath") { Mode = System.Windows.Data.BindingMode.TwoWay });
 
+        var scanBox = new System.Windows.Controls.TextBox { AcceptsReturn = true, MinWidth = 400, MinLines = 3, VerticalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto };
+        scanBox.SetBinding(System.Windows.Controls.TextBox.TextProperty, new System.Windows.Data.Binding("ScanFolders") { Mode = System.Windows.Data.BindingMode.TwoWay });
+
+        var excludeBox = new System.Windows.Controls.TextBox { MinWidth = 400 };
+        excludeBox.SetBinding(System.Windows.Controls.TextBox.TextProperty, new System.Windows.Data.Binding("ExcludeExePatterns") { Mode = System.Windows.Data.BindingMode.TwoWay });
+
         var panel = new System.Windows.Controls.StackPanel();
         panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Steam library path (e.g., C\\\\Program Files (x86)\\\\Steam):" });
         panel.Children.Add(pathBox);
+        panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Folders to scan (one per line):" });
+        panel.Children.Add(scanBox);
+        panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Exclude exe name fragments (semicolon separated):" });
+        panel.Children.Add(excludeBox);
         var launchCheck = new System.Windows.Controls.CheckBox { Content = "Launch via Steam (rungameid) when possible" };
         launchCheck.SetBinding(System.Windows.Controls.Primitives.ToggleButton.IsCheckedProperty,
             new System.Windows.Data.Binding("LaunchViaSteam") { Mode = System.Windows.Data.BindingMode.TwoWay });
@@ -193,6 +211,12 @@ public class ShortcutsLibrary : LibraryPlugin
 
     public override IEnumerable<MainMenuItem> GetMainMenuItems(GetMainMenuItemsArgs args)
     {
+        yield return new MainMenuItem
+        {
+            Description = "Steam Shortcuts: Scan & Sync Now…",
+            MenuSection = "@Steam Shortcuts",
+            Action = _ => { ShowScanAndSyncDialog(); }
+        };
         yield return new MainMenuItem
         {
             Description = "Steam Shortcuts: Sync Steam → Playnite…",
@@ -520,6 +544,227 @@ public class ShortcutsLibrary : LibraryPlugin
             Logger.Error(ex, "Add to Steam dialog error");
             PlayniteApi.Dialogs.ShowErrorMessage($"Failed to open dialog: {ex.Message}", Name);
         }
+    }
+    
+    private void ShowScanAndSyncDialog()
+    {
+        try
+        {
+            var folders = (settings.ScanFolders ?? string.Empty)
+                .Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(s => s.Trim(' ', '\t', '"'))
+                .Where(s => !string.IsNullOrWhiteSpace(s) && Directory.Exists(s))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (folders.Count == 0)
+            {
+                PlayniteApi.Dialogs.ShowErrorMessage("Add at least one valid folder to scan in settings.", Name);
+                return;
+            }
+
+            var exclude = (settings.ExcludeExePatterns ?? string.Empty)
+                .Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(s => s.Trim())
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .ToList();
+
+            var candidates = BuildScanCandidates(folders, exclude);
+            if (candidates.Count == 0)
+            {
+                PlayniteApi.Dialogs.ShowMessage("No candidates found.", Name);
+                return;
+            }
+
+            var window = PlayniteApi.Dialogs.CreateWindow(new WindowCreationOptions { ShowCloseButton = true });
+            window.Title = "Steam Shortcuts — Scan Results";
+            window.Width = 900;
+            window.Height = 650;
+
+            var grid = new System.Windows.Controls.Grid();
+            grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = new System.Windows.GridLength(1, System.Windows.GridUnitType.Star) });
+            grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = System.Windows.GridLength.Auto });
+
+            var topBar = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, Margin = new System.Windows.Thickness(8, 8, 8, 0) };
+            var btnSelectAll = new System.Windows.Controls.Button { Content = "Select All", Margin = new System.Windows.Thickness(0, 0, 8, 0) };
+            var btnDeselectAll = new System.Windows.Controls.Button { Content = "Deselect All" };
+            topBar.Children.Add(btnSelectAll);
+            topBar.Children.Add(btnDeselectAll);
+
+            var listHost = new System.Windows.Controls.StackPanel();
+            listHost.Children.Add(topBar);
+            var listPanel = new System.Windows.Controls.StackPanel { Margin = new System.Windows.Thickness(8) };
+            var scroll = new System.Windows.Controls.ScrollViewer { Content = listPanel, VerticalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto };
+            listHost.Children.Add(scroll);
+            System.Windows.Controls.Grid.SetRow(listHost, 0);
+            grid.Children.Add(listHost);
+
+            var bottom = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, Margin = new System.Windows.Thickness(8), HorizontalAlignment = System.Windows.HorizontalAlignment.Right };
+            var btnSync = new System.Windows.Controls.Button { Content = "Create/Update Selected", Margin = new System.Windows.Thickness(0, 0, 8, 0) };
+            var btnCancel = new System.Windows.Controls.Button { Content = "Cancel" };
+            bottom.Children.Add(btnSync);
+            bottom.Children.Add(btnCancel);
+            System.Windows.Controls.Grid.SetRow(bottom, 1);
+            grid.Children.Add(bottom);
+
+            window.Content = grid;
+
+            var vdfPath = ResolveShortcutsVdfPath();
+            var shortcuts = !string.IsNullOrWhiteSpace(vdfPath) && File.Exists(vdfPath) ? ShortcutsFile.Read(vdfPath!).ToList() : new List<SteamShortcut>();
+            var existingShortcuts = shortcuts.ToDictionary(s => s.AppId, s => s);
+
+            var checks = new List<System.Windows.Controls.CheckBox>();
+            foreach (var c in candidates)
+            {
+                var appId = Utils.GenerateShortcutAppId(c.Exe, c.Name);
+                var inSteam = existingShortcuts.ContainsKey(appId);
+                var inPn = FindExistingGameForShortcut(new SteamShortcut { AppName = c.Name, Exe = c.Exe }) != null;
+                var summary = $"{c.Name} — {c.Exe}" + (inSteam ? " [Steam]" : "") + (inPn ? " [Playnite]" : "");
+                var payload = new ScanPayload { Name = c.Name, Exe = c.Exe, StartDir = c.StartDir, AppId = appId };
+                var cb = new System.Windows.Controls.CheckBox { Content = summary, IsChecked = !(inSteam && inPn), Tag = payload };
+                checks.Add(cb);
+                listPanel.Children.Add(cb);
+            }
+
+            btnSelectAll.Click += (_, __) => { foreach (var c in checks) c.IsChecked = true; };
+            btnDeselectAll.Click += (_, __) => { foreach (var c in checks) c.IsChecked = false; };
+            btnCancel.Click += (_, __) => { window.DialogResult = false; window.Close(); };
+            btnSync.Click += (_, __) =>
+            {
+                try
+                {
+                    var selected = checks.Where(c => c.IsChecked == true).Select(c => (ScanPayload)c.Tag).ToList();
+                    int addedSteam = 0, updatedSteam = 0, addedPn = 0, updatedPn = 0;
+                    foreach (var t in selected)
+                    {
+                        string name = t.Name;
+                        string exe = t.Exe;
+                        string startDir = t.StartDir;
+                        uint appId = t.AppId;
+
+                        var found = shortcuts.FirstOrDefault(s => s.AppId == appId);
+                        if (found == null)
+                        {
+                            found = new SteamShortcut { AppName = name, Exe = exe, StartDir = startDir, AppId = appId };
+                            shortcuts.Add(found); addedSteam++;
+                        }
+                        else
+                        {
+                            found.AppName = name; found.Exe = exe; found.StartDir = startDir; updatedSteam++;
+                        }
+
+                        var existing = FindExistingGameForShortcut(new SteamShortcut { AppName = name, Exe = exe, AppId = appId });
+                        if (existing == null)
+                        {
+                            var g = new Game
+                            {
+                                PluginId = Id,
+                                GameId = Utils.HashString($"{exe}|{name}"),
+                                Name = name,
+                                InstallDirectory = startDir,
+                                IsInstalled = true,
+                                GameActions = new System.Collections.ObjectModel.ObservableCollection<GameAction>(new[] { BuildPlayAction(new SteamShortcut { AppName = name, Exe = exe, StartDir = startDir, AppId = appId }) })
+                            };
+                            PlayniteApi.Database.Games.Add(g);
+                            addedPn++;
+                        }
+                        else
+                        {
+                            existing.Name = name;
+                            existing.InstallDirectory = startDir;
+                            EnsureSteamPlayAction(existing, new SteamShortcut { AppName = name, Exe = exe, StartDir = startDir, AppId = appId });
+                            PlayniteApi.Database.Games.Update(existing);
+                            updatedPn++;
+                        }
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(vdfPath))
+                    {
+                        ShortcutsFile.Write(vdfPath!, shortcuts);
+                    }
+                    PlayniteApi.Dialogs.ShowMessage($"Steam: +{addedSteam}/~{updatedSteam}, Playnite: +{addedPn}/~{updatedPn}", Name);
+                    window.DialogResult = true; window.Close();
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error(ex, "Scan & Sync failed");
+                    PlayniteApi.Dialogs.ShowErrorMessage($"Failed: {ex.Message}", Name);
+                }
+            };
+
+            window.ShowDialog();
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex, "Failed to run Scan & Sync");
+            PlayniteApi.Dialogs.ShowErrorMessage($"Failed to run Scan & Sync: {ex.Message}", Name);
+        }
+    }
+
+    private List<ScanCandidate> BuildScanCandidates(List<string> roots, List<string> exclude)
+    {
+        var results = new List<ScanCandidate>();
+        var excludeLower = new HashSet<string>(exclude.Select(s => s.ToLowerInvariant()));
+        foreach (var root in roots)
+        {
+            if (!Directory.Exists(root)) continue;
+            List<string> files;
+            try { files = Directory.EnumerateFiles(root, "*.exe", SearchOption.AllDirectories).ToList(); } catch { continue; }
+            var byDir = files.GroupBy(f => Path.GetDirectoryName(f) ?? string.Empty);
+            foreach (var grp in byDir)
+            {
+                var dir = grp.Key;
+                if (string.IsNullOrEmpty(dir)) continue;
+                var dirName = new DirectoryInfo(dir).Name;
+                string best = null;
+                long bestSize = -1;
+                foreach (var f in grp)
+                {
+                    var fn = Path.GetFileNameWithoutExtension(f);
+                    var fnLower = fn.ToLowerInvariant();
+                    if (excludeLower.Any(x => fnLower.Contains(x)))
+                    {
+                        continue;
+                    }
+                    if (string.Equals(fn, dirName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        best = f; bestSize = long.MaxValue; break;
+                    }
+                    try
+                    {
+                        var size = new FileInfo(f).Length;
+                        if (size > bestSize)
+                        {
+                            best = f; bestSize = size;
+                        }
+                    }
+                    catch { }
+                }
+                if (!string.IsNullOrEmpty(best))
+                {
+                    results.Add(new ScanCandidate { Name = dirName, Exe = best, StartDir = dir });
+                }
+            }
+        }
+        return results
+            .GroupBy(c => c.Exe, StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.First())
+            .OrderBy(c => c.Name)
+            .ToList();
+    }
+
+    private class ScanCandidate
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Exe { get; set; } = string.Empty;
+        public string StartDir { get; set; } = string.Empty;
+    }
+
+    private class ScanPayload
+    {
+        public string Name { get; set; }
+        public string Exe { get; set; }
+        public string StartDir { get; set; }
+        public uint AppId { get; set; }
     }
 
     private void AddGamesToSteam(IEnumerable<Game> games)
