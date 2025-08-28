@@ -201,6 +201,30 @@ public class ShortcutsLibrary : LibraryPlugin
         };
     }
 
+    public override IEnumerable<GameMenuItem> GetGameMenuItems(GetGameMenuItemsArgs args)
+    {
+        if (args.Games?.Any() == true)
+        {
+            yield return new GameMenuItem
+            {
+                Description = "Add selected to Steam Shortcuts",
+                MenuSection = "Steam Shortcuts",
+                Action = _ =>
+                {
+                    try
+                    {
+                        AddGamesToSteam(args.Games);
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Error(ex, "Failed to add selected games to Steam shortcuts from context menu.");
+                        PlayniteApi.Dialogs.ShowErrorMessage($"Failed: {ex.Message}", Name);
+                    }
+                }
+            };
+        }
+    }
+
     public override IEnumerable<GameMetadata> GetGames(LibraryGetGamesArgs args)
     {
         var vdfPath = ResolveShortcutsVdfPath();
@@ -454,6 +478,86 @@ public class ShortcutsLibrary : LibraryPlugin
             Logger.Error(ex, "Add to Steam dialog error");
             PlayniteApi.Dialogs.ShowErrorMessage($"Failed to open dialog: {ex.Message}", Name);
         }
+    }
+
+    private void AddGamesToSteam(IEnumerable<Game> games)
+    {
+        var vdfPath = ResolveShortcutsVdfPath();
+        if (string.IsNullOrWhiteSpace(vdfPath))
+        {
+            PlayniteApi.Dialogs.ShowErrorMessage("Set a valid Steam library path in settings.", Name);
+            return;
+        }
+
+        var shortcuts = ShortcutsFile.Read(vdfPath!).ToList();
+        var existing = shortcuts.ToDictionary(s => s.AppId, s => s);
+
+        int added = 0, updated = 0, skipped = 0;
+        foreach (var g in games)
+        {
+            var action = g.GameActions?.FirstOrDefault(a => a.IsPlayAction) ?? g.GameActions?.FirstOrDefault();
+            if (action == null || action.Type != GameActionType.File || string.IsNullOrEmpty(action.Path))
+            {
+                skipped++;
+                continue;
+            }
+
+            var exePath = ExpandPathVariables(g, action.Path) ?? string.Empty;
+            var workDir = ExpandPathVariables(g, action.WorkingDir);
+            if (string.IsNullOrWhiteSpace(workDir) && !string.IsNullOrWhiteSpace(exePath))
+            {
+                try { workDir = Path.GetDirectoryName(exePath) ?? string.Empty; } catch { workDir = string.Empty; }
+            }
+            var args = ExpandPathVariables(g, action.Arguments) ?? string.Empty;
+
+            var appId = Utils.GenerateShortcutAppId(exePath, g.Name);
+            if (existing.TryGetValue(appId, out var sc))
+            {
+                // Update existing shortcut data
+                sc.AppName = g.Name;
+                sc.Exe = exePath;
+                sc.StartDir = workDir ?? sc.StartDir;
+                sc.LaunchOptions = args;
+                updated++;
+            }
+            else
+            {
+                sc = new SteamShortcut
+                {
+                    AppName = g.Name,
+                    Exe = exePath,
+                    StartDir = workDir ?? string.Empty,
+                    LaunchOptions = args,
+                    AppId = appId
+                };
+                shortcuts.Add(sc);
+                existing[appId] = sc;
+                added++;
+            }
+
+            if (settings.LaunchViaSteam)
+            {
+                EnsureSteamPlayAction(g, sc);
+            }
+        }
+
+        ShortcutsFile.Write(vdfPath!, shortcuts);
+
+        // Export artwork
+        var gridDir = TryGetGridDirFromVdf(vdfPath!);
+        foreach (var g in games)
+        {
+            var action = g.GameActions?.FirstOrDefault(a => a.IsPlayAction) ?? g.GameActions?.FirstOrDefault();
+            if (action == null || action.Type != GameActionType.File || string.IsNullOrEmpty(action.Path))
+            {
+                continue;
+            }
+            var exePath = ExpandPathVariables(g, action.Path) ?? string.Empty;
+            var appId = Utils.GenerateShortcutAppId(exePath, g.Name);
+            TryExportArtworkToGrid(g, appId, gridDir);
+        }
+
+        PlayniteApi.Dialogs.ShowMessage($"Added {added}, updated {updated}, skipped {skipped}.", Name);
     }
 
     private class Candidate
