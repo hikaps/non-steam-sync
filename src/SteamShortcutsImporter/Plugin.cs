@@ -15,6 +15,8 @@ public class PluginSettings : ISettings
 
     // Root Steam library/install path (e.g., C:\\Program Files (x86)\\Steam)
     public string SteamRootPath { get; set; } = string.Empty;
+    // If true, configure Play actions to launch via Steam rungameid.
+    public bool LaunchViaSteam { get; set; } = true;
 
     // Persisted settings copy
     public void BeginEdit() { }
@@ -50,17 +52,20 @@ public class PluginSettings : ISettings
             if (saved != null)
             {
                 SteamRootPath = saved.SteamRootPath;
+                LaunchViaSteam = saved.LaunchViaSteam;
             }
             else
             {
                 // Try to prefill with a sensible default
                 SteamRootPath = GuessSteamRootPath() ?? string.Empty;
+                LaunchViaSteam = true;
             }
         }
         catch (Exception ex)
         {
             LogManager.GetLogger().Error(ex, "Failed to load saved settings, falling back to defaults.");
             SteamRootPath = GuessSteamRootPath() ?? string.Empty;
+            LaunchViaSteam = true;
         }
     }
 
@@ -112,14 +117,14 @@ public class PluginSettingsView : System.Windows.Controls.UserControl
         pathBox.SetBinding(System.Windows.Controls.TextBox.TextProperty,
             new System.Windows.Data.Binding("SteamRootPath") { Mode = System.Windows.Data.BindingMode.TwoWay });
 
-        Content = new System.Windows.Controls.StackPanel
-        {
-            Children =
-            {
-                new System.Windows.Controls.TextBlock { Text = "Steam library path (e.g., C:\\Program Files (x86)\\Steam):" },
-                pathBox
-            }
-        };
+        var panel = new System.Windows.Controls.StackPanel();
+        panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Steam library path (e.g., C\\\Program Files (x86)\\\Steam):" });
+        panel.Children.Add(pathBox);
+        var launchCheck = new System.Windows.Controls.CheckBox { Content = "Launch via Steam (rungameid) when possible" };
+        launchCheck.SetBinding(System.Windows.Controls.Primitives.ToggleButton.IsCheckedProperty,
+            new System.Windows.Data.Binding("LaunchViaSteam") { Mode = System.Windows.Data.BindingMode.TwoWay });
+        panel.Children.Add(launchCheck);
+        Content = panel;
     }
 }
 
@@ -184,6 +189,12 @@ public class ShortcutsLibrary : LibraryPlugin
         };
         yield return new MainMenuItem
         {
+            Description = "Steam Shortcuts: Add Playnite Games…",
+            MenuSection = "@Steam Shortcuts",
+            Action = _ => { ShowAddToSteamDialog(); }
+        };
+        yield return new MainMenuItem
+        {
             Description = "Steam Shortcuts: Sync Back",
             MenuSection = "@Steam Shortcuts",
             Action = _ => { SyncBackAll(); }
@@ -237,7 +248,7 @@ public class ShortcutsLibrary : LibraryPlugin
 
     private GameAction BuildPlayAction(SteamShortcut sc)
     {
-        if (sc.AppId != 0)
+        if (settings.LaunchViaSteam && sc.AppId != 0)
         {
             var gid = Utils.ToShortcutGameId(sc.AppId);
             return new GameAction
@@ -263,7 +274,7 @@ public class ShortcutsLibrary : LibraryPlugin
     {
         try
         {
-            if (sc.AppId == 0)
+            if (!settings.LaunchViaSteam || sc.AppId == 0)
             {
                 return;
             }
@@ -282,6 +293,156 @@ public class ShortcutsLibrary : LibraryPlugin
         catch (Exception ex)
         {
             Logger.Warn(ex, $"Failed to ensure Steam play action for game '{game.Name}'");
+        }
+    }
+
+    private void ShowAddToSteamDialog()
+    {
+        var vdfPath = ResolveShortcutsVdfPath();
+        if (string.IsNullOrWhiteSpace(vdfPath) || !File.Exists(vdfPath))
+        {
+            PlayniteApi.Dialogs.ShowErrorMessage("Set a valid Steam library path in settings (we’ll find shortcuts.vdf automatically).", Name);
+            return;
+        }
+
+        try
+        {
+            var allGames = PlayniteApi.Database.Games.Where(g => !g.Hidden).ToList();
+            var shortcuts = ShortcutsFile.Read(vdfPath!).ToList();
+
+            var window = PlayniteApi.Dialogs.CreateWindow(new WindowCreationOptions { ShowCloseButton = true });
+            window.Title = "Steam Shortcuts — Add Playnite Games";
+            window.Width = 900;
+            window.Height = 650;
+
+            var grid = new System.Windows.Controls.Grid();
+            grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = new System.Windows.GridLength(1, System.Windows.GridUnitType.Star) });
+            grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = System.Windows.GridLength.Auto });
+
+            var searchBar = new System.Windows.Controls.TextBox { Margin = new System.Windows.Thickness(8), PlaceholderText = "Filter games..." };
+            var listPanel = new System.Windows.Controls.StackPanel { Margin = new System.Windows.Thickness(8) };
+            var scroll = new System.Windows.Controls.ScrollViewer { Content = listPanel, VerticalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto };
+
+            var container = new System.Windows.Controls.StackPanel();
+            container.Children.Add(searchBar);
+            container.Children.Add(scroll);
+            System.Windows.Controls.Grid.SetRow(container, 0);
+            grid.Children.Add(container);
+
+            var bottom = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, Margin = new System.Windows.Thickness(8), HorizontalAlignment = System.Windows.HorizontalAlignment.Right };
+            var importBtn = new System.Windows.Controls.Button { Content = "Add to Steam", Margin = new System.Windows.Thickness(0, 0, 8, 0) };
+            var cancelBtn = new System.Windows.Controls.Button { Content = "Cancel" };
+            bottom.Children.Add(importBtn);
+            bottom.Children.Add(cancelBtn);
+            System.Windows.Controls.Grid.SetRow(bottom, 1);
+            grid.Children.Add(bottom);
+
+            window.Content = grid;
+
+            // Build candidates: only games with a File play action
+            var candidates = new List<(Game game, GameAction action, string summary, uint calcAppId)>();
+            foreach (var g in allGames)
+            {
+                var action = g.GameActions?.FirstOrDefault(a => a.IsPlayAction) ?? g.GameActions?.FirstOrDefault();
+                if (action == null || action.Type != GameActionType.File || string.IsNullOrEmpty(action.Path))
+                {
+                    continue;
+                }
+                var exe = action.Path;
+                var name = g.Name;
+                var calcApp = Utils.GenerateShortcutAppId(exe, name);
+                var summary = $"{name} — {exe}";
+                candidates.Add((g, action, summary, calcApp));
+            }
+
+            // Existing map to avoid duplicates
+            var existing = shortcuts.ToDictionary(s => s.AppId, s => s);
+
+            var entries = new List<System.Windows.Controls.CheckBox>();
+            void RefreshList()
+            {
+                var filter = searchBar.Text?.Trim() ?? string.Empty;
+                listPanel.Children.Clear();
+                entries.Clear();
+                foreach (var c in candidates)
+                {
+                    if (!string.IsNullOrEmpty(filter) && c.game.Name?.IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0)
+                    {
+                        continue;
+                    }
+                    var already = existing.ContainsKey(c.calcAppId) || shortcuts.Any(s => string.Equals(s.AppName, c.game.Name, StringComparison.OrdinalIgnoreCase) && string.Equals(s.Exe, c.action.Path, StringComparison.OrdinalIgnoreCase));
+                    var cb = new System.Windows.Controls.CheckBox
+                    {
+                        Content = c.summary,
+                        IsChecked = !already,
+                        Tag = c
+                    };
+                    entries.Add(cb);
+                    listPanel.Children.Add(cb);
+                }
+            }
+
+            searchBar.TextChanged += (_, __) => RefreshList();
+            RefreshList();
+
+            cancelBtn.Click += (_, __) => { window.DialogResult = false; window.Close(); };
+            importBtn.Click += (_, __) =>
+            {
+                try
+                {
+                    var selected = entries.Where(e => e.IsChecked == true).Select(e => ((Game game, GameAction action, string summary, uint calcAppId))e.Tag).ToList();
+                    if (selected.Count == 0)
+                    {
+                        window.DialogResult = true; window.Close(); return;
+                    }
+
+                    var list = shortcuts.ToList();
+                    foreach (var item in selected)
+                    {
+                        if (existing.ContainsKey(item.calcAppId)) continue;
+                        var sc = new SteamShortcut
+                        {
+                            AppName = item.game.Name,
+                            Exe = item.action.Path,
+                            StartDir = item.action.WorkingDir ?? item.game.InstallDirectory ?? string.Empty,
+                            LaunchOptions = item.action.Arguments ?? string.Empty,
+                            AppId = item.calcAppId,
+                            Tags = null
+                        };
+                        list.Add(sc);
+
+                        // Optionally set Play action to Steam and export artwork
+                        if (settings.LaunchViaSteam)
+                        {
+                            EnsureSteamPlayAction(item.game, sc);
+                        }
+                    }
+
+                    ShortcutsFile.Write(vdfPath!, list);
+
+                    // Export artwork
+                    var gridDir = TryGetGridDirFromVdf(vdfPath!);
+                    foreach (var item in selected)
+                    {
+                        TryExportArtworkToGrid(item.game, item.calcAppId, gridDir);
+                    }
+
+                    PlayniteApi.Dialogs.ShowMessage($"Added {selected.Count} games to Steam shortcuts.", Name);
+                    window.DialogResult = true; window.Close();
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error(ex, "Failed adding games to Steam shortcuts.");
+                    PlayniteApi.Dialogs.ShowErrorMessage($"Failed to add games: {ex.Message}", Name);
+                }
+            };
+
+            window.ShowDialog();
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex, "Add to Steam dialog error");
+            PlayniteApi.Dialogs.ShowErrorMessage($"Failed to open dialog: {ex.Message}", Name);
         }
     }
 
