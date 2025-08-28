@@ -423,7 +423,7 @@ public class ShortcutsLibrary : LibraryPlugin
             grid.Children.Add(container);
 
             var bottom = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, Margin = new System.Windows.Thickness(8), HorizontalAlignment = System.Windows.HorizontalAlignment.Right };
-            var importBtn = new System.Windows.Controls.Button { Content = "Add to Steam", Margin = new System.Windows.Thickness(0, 0, 8, 0) };
+            var importBtn = new System.Windows.Controls.Button { Content = "Import", Margin = new System.Windows.Thickness(0, 0, 8, 0) };
             var cancelBtn = new System.Windows.Controls.Button { Content = "Cancel" };
             bottom.Children.Add(importBtn);
             bottom.Children.Add(cancelBtn);
@@ -962,37 +962,36 @@ public class ShortcutsLibrary : LibraryPlugin
                 PlayniteApi.Dialogs.ShowMessage($"No shortcuts found in {vdfPath}. If you manually copied shortcuts.vdf, ensure it’s a binary file from Steam and not a text paste.", Name);
             }
 
-            // Prepare UI
-            var window = PlayniteApi.Dialogs.CreateWindow(new WindowCreationOptions
-            {
-                ShowCloseButton = true
-            });
+            // Prepare UI (unified with Playnite → Steam dialog)
+            var window = PlayniteApi.Dialogs.CreateWindow(new WindowCreationOptions { ShowCloseButton = true });
             window.Title = "Steam Shortcuts — Select Items to Import";
-            window.Width = 820;
-            window.Height = 600;
+            window.Width = 900;
+            window.Height = 650;
 
-            // Grid layout: row 0 = list (fills), row 1 = buttons (bottom)
             var grid = new System.Windows.Controls.Grid();
             grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = new System.Windows.GridLength(1, System.Windows.GridUnitType.Star) });
             grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = System.Windows.GridLength.Auto });
 
-            var topBar = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, Margin = new System.Windows.Thickness(8,8,8,0) };
+            var topBar = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, Margin = new System.Windows.Thickness(8, 8, 8, 0) };
+            var lblFilter = new System.Windows.Controls.TextBlock { Text = "Filter games:", Margin = new System.Windows.Thickness(0, 0, 8, 0) };
+            var searchBar = new System.Windows.Controls.TextBox { Width = 300, Margin = new System.Windows.Thickness(0, 0, 16, 0) };
             var btnSelectAll = new System.Windows.Controls.Button { Content = "Select All", Margin = new System.Windows.Thickness(0, 0, 8, 0) };
             var btnSelectNone = new System.Windows.Controls.Button { Content = "Deselect All" };
+            topBar.Children.Add(lblFilter);
+            topBar.Children.Add(searchBar);
             topBar.Children.Add(btnSelectAll);
             topBar.Children.Add(btnSelectNone);
 
             var listHost = new System.Windows.Controls.StackPanel();
             listHost.Children.Add(topBar);
-            var scroll = new System.Windows.Controls.ScrollViewer { VerticalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto };
             var listPanel = new System.Windows.Controls.StackPanel { Margin = new System.Windows.Thickness(8) };
-            scroll.Content = listPanel;
+            var scroll = new System.Windows.Controls.ScrollViewer { Content = listPanel, VerticalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto };
             listHost.Children.Add(scroll);
             System.Windows.Controls.Grid.SetRow(listHost, 0);
             grid.Children.Add(listHost);
 
             var bottomBar = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, Margin = new System.Windows.Thickness(8), HorizontalAlignment = System.Windows.HorizontalAlignment.Right };
-            var btnImport = new System.Windows.Controls.Button { Content = "Import Selected", Margin = new System.Windows.Thickness(0, 0, 8, 0) };
+            var btnImport = new System.Windows.Controls.Button { Content = "Import", Margin = new System.Windows.Thickness(0, 0, 8, 0) };
             var btnCancel = new System.Windows.Controls.Button { Content = "Cancel" };
             bottomBar.Children.Add(btnImport);
             bottomBar.Children.Add(btnCancel);
@@ -1001,61 +1000,58 @@ public class ShortcutsLibrary : LibraryPlugin
 
             window.Content = grid;
 
-            // Build list with checkboxes; default-check only items not already present
             var existingById = PlayniteApi.Database.Games
                 .Where(g => g.PluginId == Id && !string.IsNullOrEmpty(g.GameId))
                 .ToDictionary(g => g.GameId, g => g, StringComparer.OrdinalIgnoreCase);
 
             var checkBoxes = new List<System.Windows.Controls.CheckBox>();
-            foreach (var sc in shortcuts)
+
+            void RefreshList()
             {
-                var summary = $"{sc.AppName} — {sc.Exe}";
-                var isAlready = !string.IsNullOrEmpty(sc.StableId) && existingById.ContainsKey(sc.StableId);
-                var cb = new System.Windows.Controls.CheckBox
+                var filter = searchBar.Text?.Trim() ?? string.Empty;
+                listPanel.Children.Clear();
+                checkBoxes.Clear();
+                foreach (var sc in shortcuts)
                 {
-                    Content = summary,
-                    IsChecked = !isAlready,
-                    Tag = sc,
-                    Margin = new System.Windows.Thickness(0, 4, 0, 4)
-                };
-                checkBoxes.Add(cb);
-                listPanel.Children.Add(cb);
+                    if (!string.IsNullOrEmpty(filter) && sc.AppName?.IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0)
+                    {
+                        continue;
+                    }
+                    var summary = $"{sc.AppName} — {sc.Exe}";
+                    var isAlready = !string.IsNullOrEmpty(sc.StableId) && existingById.ContainsKey(sc.StableId);
+                    var cb = new System.Windows.Controls.CheckBox
+                    {
+                        Content = summary,
+                        IsChecked = !isAlready,
+                        Tag = sc,
+                        Margin = new System.Windows.Thickness(0, 4, 0, 4)
+                    };
+                    checkBoxes.Add(cb);
+                    listPanel.Children.Add(cb);
+                }
             }
 
-            btnSelectAll.Click += (_, __) =>
-            {
-                foreach (var cb in checkBoxes) cb.IsChecked = true;
-            };
-            btnSelectNone.Click += (_, __) =>
-            {
-                foreach (var cb in checkBoxes) cb.IsChecked = false;
-            };
-            btnCancel.Click += (_, __) =>
-            {
-                window.DialogResult = false;
-                window.Close();
-            };
+            searchBar.TextChanged += (_, __) => RefreshList();
+            RefreshList();
+
+            btnSelectAll.Click += (_, __) => { foreach (var cb in checkBoxes) cb.IsChecked = true; };
+            btnSelectNone.Click += (_, __) => { foreach (var cb in checkBoxes) cb.IsChecked = false; };
+            btnCancel.Click += (_, __) => { window.DialogResult = false; window.Close(); };
             btnImport.Click += (_, __) =>
             {
                 try
                 {
-                    var selected = checkBoxes
-                        .Where(c => c.IsChecked == true)
-                        .Select(c => (SteamShortcut)c.Tag)
-                        .ToList();
+                    var selected = checkBoxes.Where(c => c.IsChecked == true).Select(c => (SteamShortcut)c.Tag).ToList();
                     Logger.Info($"Import dialog: user selected {selected.Count} items for import.");
-
                     if (selected.Count > 0)
                     {
                         var newGames = new List<Game>();
                         foreach (var sc in selected)
                         {
-                            // Skip duplicates by GameId
                             if (!string.IsNullOrEmpty(sc.StableId) && existingById.ContainsKey(sc.StableId))
                             {
                                 continue;
                             }
-
                             var g = new Game
                             {
                                 PluginId = Id,
@@ -1063,14 +1059,8 @@ public class ShortcutsLibrary : LibraryPlugin
                                 Name = sc.AppName,
                                 InstallDirectory = string.IsNullOrEmpty(sc.StartDir) ? null : sc.StartDir,
                                 IsInstalled = true,
-                                GameActions = new System.Collections.ObjectModel.ObservableCollection<GameAction>(
-                                    new[]
-                                    {
-                                        BuildPlayAction(sc)
-                                    })
+                                GameActions = new System.Collections.ObjectModel.ObservableCollection<GameAction>(new[] { BuildPlayAction(sc) })
                             };
-
-                            // Apply tags if any exist
                             if (sc.Tags?.Any() == true)
                             {
                                 g.TagIds = new List<Guid>();
@@ -1080,14 +1070,11 @@ public class ShortcutsLibrary : LibraryPlugin
                                     g.TagIds.Add(tag.Id);
                                 }
                             }
-
                             newGames.Add(g);
                         }
-
                         if (newGames.Count > 0)
                         {
                             PlayniteApi.Database.Games.Add(newGames);
-                            // Optionally sync existing artwork from Steam grid into Playnite on import
                             try
                             {
                                 var gridDir = TryGetGridDirFromVdf(vdfPath!);
@@ -1107,9 +1094,7 @@ public class ShortcutsLibrary : LibraryPlugin
                             Logger.Info($"Import dialog: imported {newGames.Count} games.");
                         }
                     }
-
-                    window.DialogResult = true;
-                    window.Close();
+                    window.DialogResult = true; window.Close();
                 }
                 catch (Exception ex)
                 {
