@@ -319,11 +319,14 @@ public class ShortcutsLibrary : LibraryPlugin
             grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = new System.Windows.GridLength(1, System.Windows.GridUnitType.Star) });
             grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = System.Windows.GridLength.Auto });
 
-            var searchBar = new System.Windows.Controls.TextBox { Margin = new System.Windows.Thickness(8), PlaceholderText = "Filter games..." };
+            // Simple filter box (WPF TextBox has no PlaceholderText on net462)
+            var searchLabel = new System.Windows.Controls.TextBlock { Text = "Filter games:", Margin = new System.Windows.Thickness(8,8,8,0) };
+            var searchBar = new System.Windows.Controls.TextBox { Margin = new System.Windows.Thickness(8,0,8,8) };
             var listPanel = new System.Windows.Controls.StackPanel { Margin = new System.Windows.Thickness(8) };
             var scroll = new System.Windows.Controls.ScrollViewer { Content = listPanel, VerticalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto };
 
             var container = new System.Windows.Controls.StackPanel();
+            container.Children.Add(searchLabel);
             container.Children.Add(searchBar);
             container.Children.Add(scroll);
             System.Windows.Controls.Grid.SetRow(container, 0);
@@ -340,7 +343,7 @@ public class ShortcutsLibrary : LibraryPlugin
             window.Content = grid;
 
             // Build candidates: only games with a File play action
-            var candidates = new List<(Game game, GameAction action, string summary, uint calcAppId)>();
+            var candidates = new List<Candidate>();
             foreach (var g in allGames)
             {
                 var action = g.GameActions?.FirstOrDefault(a => a.IsPlayAction) ?? g.GameActions?.FirstOrDefault();
@@ -352,7 +355,7 @@ public class ShortcutsLibrary : LibraryPlugin
                 var name = g.Name;
                 var calcApp = Utils.GenerateShortcutAppId(exe, name);
                 var summary = $"{name} — {exe}";
-                candidates.Add((g, action, summary, calcApp));
+                candidates.Add(new Candidate { Game = g, Action = action, Summary = summary, CalcAppId = calcApp });
             }
 
             // Existing map to avoid duplicates
@@ -366,14 +369,14 @@ public class ShortcutsLibrary : LibraryPlugin
                 entries.Clear();
                 foreach (var c in candidates)
                 {
-                    if (!string.IsNullOrEmpty(filter) && c.game.Name?.IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0)
+                    if (!string.IsNullOrEmpty(filter) && c.Game.Name?.IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0)
                     {
                         continue;
                     }
-                    var already = existing.ContainsKey(c.calcAppId) || shortcuts.Any(s => string.Equals(s.AppName, c.game.Name, StringComparison.OrdinalIgnoreCase) && string.Equals(s.Exe, c.action.Path, StringComparison.OrdinalIgnoreCase));
+                    var already = existing.ContainsKey(c.CalcAppId) || shortcuts.Any(s => string.Equals(s.AppName, c.Game.Name, StringComparison.OrdinalIgnoreCase) && string.Equals(s.Exe, c.Action.Path, StringComparison.OrdinalIgnoreCase));
                     var cb = new System.Windows.Controls.CheckBox
                     {
-                        Content = c.summary,
+                        Content = c.Summary,
                         IsChecked = !already,
                         Tag = c
                     };
@@ -390,7 +393,7 @@ public class ShortcutsLibrary : LibraryPlugin
             {
                 try
                 {
-                    var selected = entries.Where(e => e.IsChecked == true).Select(e => ((Game game, GameAction action, string summary, uint calcAppId))e.Tag).ToList();
+                    var selected = entries.Where(e => e.IsChecked == true).Select(e => (Candidate)e.Tag).ToList();
                     if (selected.Count == 0)
                     {
                         window.DialogResult = true; window.Close(); return;
@@ -399,14 +402,14 @@ public class ShortcutsLibrary : LibraryPlugin
                     var list = shortcuts.ToList();
                     foreach (var item in selected)
                     {
-                        if (existing.ContainsKey(item.calcAppId)) continue;
+                        if (existing.ContainsKey(item.CalcAppId)) continue;
                         var sc = new SteamShortcut
                         {
-                            AppName = item.game.Name,
-                            Exe = item.action.Path,
-                            StartDir = item.action.WorkingDir ?? item.game.InstallDirectory ?? string.Empty,
-                            LaunchOptions = item.action.Arguments ?? string.Empty,
-                            AppId = item.calcAppId,
+                            AppName = item.Game.Name,
+                            Exe = item.Action.Path,
+                            StartDir = item.Action.WorkingDir ?? item.Game.InstallDirectory ?? string.Empty,
+                            LaunchOptions = item.Action.Arguments ?? string.Empty,
+                            AppId = item.CalcAppId,
                             Tags = null
                         };
                         list.Add(sc);
@@ -414,7 +417,7 @@ public class ShortcutsLibrary : LibraryPlugin
                         // Optionally set Play action to Steam and export artwork
                         if (settings.LaunchViaSteam)
                         {
-                            EnsureSteamPlayAction(item.game, sc);
+                            EnsureSteamPlayAction(item.Game, sc);
                         }
                     }
 
@@ -424,7 +427,7 @@ public class ShortcutsLibrary : LibraryPlugin
                     var gridDir = TryGetGridDirFromVdf(vdfPath!);
                     foreach (var item in selected)
                     {
-                        TryExportArtworkToGrid(item.game, item.calcAppId, gridDir);
+                        TryExportArtworkToGrid(item.Game, item.CalcAppId, gridDir);
                     }
 
                     PlayniteApi.Dialogs.ShowMessage($"Added {selected.Count} games to Steam shortcuts.", Name);
@@ -444,6 +447,14 @@ public class ShortcutsLibrary : LibraryPlugin
             Logger.Error(ex, "Add to Steam dialog error");
             PlayniteApi.Dialogs.ShowErrorMessage($"Failed to open dialog: {ex.Message}", Name);
         }
+    }
+
+    private class Candidate
+    {
+        public Game Game { get; set; } = default!;
+        public GameAction Action { get; set; } = default!;
+        public string Summary { get; set; } = string.Empty;
+        public uint CalcAppId { get; set; }
     }
 
     private void ForceImport()
