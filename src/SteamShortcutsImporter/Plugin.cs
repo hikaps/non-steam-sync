@@ -144,13 +144,16 @@ public class PluginSettingsView : System.Windows.Controls.UserControl
         excludeBox.SetBinding(System.Windows.Controls.TextBox.TextProperty, new System.Windows.Data.Binding("ExcludeExePatterns") { Mode = System.Windows.Data.BindingMode.TwoWay });
 
         var panel = new System.Windows.Controls.StackPanel { Margin = new System.Windows.Thickness(12) };
-        panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Steam library path (e.g., C\\\\Program Files (x86)\\\\Steam):", FontWeight = System.Windows.FontWeights.Bold });
+        panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Steam library path (e.g., C\\\\Program Files (x86)\\\\Steam):", FontWeight = System.Windows.FontWeights.Bold, FontSize = 11 });
+        pathBox.Margin = new System.Windows.Thickness(0, 4, 0, 0);
         panel.Children.Add(pathBox);
-        panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Folders to scan (one per line):", Margin = new System.Windows.Thickness(0,8,0,0), FontWeight = System.Windows.FontWeights.Bold });
+        panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Folders to scan (one per line):", Margin = new System.Windows.Thickness(0,10,0,0), FontWeight = System.Windows.FontWeights.Bold, FontSize = 11 });
+        scanBox.Margin = new System.Windows.Thickness(0, 4, 0, 0);
         panel.Children.Add(scanBox);
-        panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Exclude exe name fragments (semicolon separated):", Margin = new System.Windows.Thickness(0,8,0,0), FontWeight = System.Windows.FontWeights.Bold });
+        panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Exclude exe name fragments (semicolon separated):", Margin = new System.Windows.Thickness(0,10,0,0), FontWeight = System.Windows.FontWeights.Bold, FontSize = 11 });
+        excludeBox.Margin = new System.Windows.Thickness(0, 4, 0, 0);
         panel.Children.Add(excludeBox);
-        panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Examples: 'unins;installer;setup;updater'", Margin = new System.Windows.Thickness(0,2,0,6), Opacity = 0.8 });
+        panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Examples: unins; installer; setup; updater", Margin = new System.Windows.Thickness(0,2,0,6), Opacity = 0.8, FontSize = 10.5 });
         var launchCheck = new System.Windows.Controls.CheckBox { Content = "Launch via Steam (rungameid) when possible", Margin = new System.Windows.Thickness(0,8,0,0) };
         launchCheck.SetBinding(System.Windows.Controls.Primitives.ToggleButton.IsCheckedProperty,
             new System.Windows.Data.Binding("LaunchViaSteam") { Mode = System.Windows.Data.BindingMode.TwoWay });
@@ -337,6 +340,32 @@ public class ShortcutsLibrary : LibraryPlugin
         return null;
     }
 
+    private Game? FindAnyExistingGameForShortcut(SteamShortcut sc)
+    {
+        try
+        {
+            // by play action exe match across all games
+            var byName = PlayniteApi.Database.Games.Where(x => string.Equals(x.Name, sc.AppName, StringComparison.OrdinalIgnoreCase));
+            foreach (var g in byName)
+            {
+                var act = g.GameActions?.FirstOrDefault(a => a.IsPlayAction) ?? g.GameActions?.FirstOrDefault();
+                if (act != null && act.Type == GameActionType.File)
+                {
+                    var exe = (act.Path ?? string.Empty).Trim('"');
+                    if (string.Equals(exe, (sc.Exe ?? string.Empty).Trim('"'), StringComparison.OrdinalIgnoreCase))
+                    {
+                        return g;
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn(ex, "Failed during any-game lookup.");
+        }
+        return null;
+    }
+
     private GameAction BuildPlayAction(SteamShortcut sc)
     {
         if (settings.LaunchViaSteam && sc.AppId != 0)
@@ -477,7 +506,8 @@ public class ShortcutsLibrary : LibraryPlugin
                     {
                         Content = c.Summary,
                         IsChecked = !already,
-                        Tag = c
+                        Tag = c,
+                        Margin = new System.Windows.Thickness(0, 4, 0, 4)
                     };
                     entries.Add(cb);
                     listPanel.Children.Add(cb);
@@ -628,7 +658,7 @@ public class ShortcutsLibrary : LibraryPlugin
             {
                 var appId = Utils.GenerateShortcutAppId(c.Exe, c.Name);
                 var inSteam = existingShortcuts.ContainsKey(appId);
-                var inPn = FindExistingGameForShortcut(new SteamShortcut { AppName = c.Name, Exe = c.Exe }) != null;
+                var inPn = FindAnyExistingGameForShortcut(new SteamShortcut { AppName = c.Name, Exe = c.Exe }) != null;
                 var summary = $"{c.Name} — {c.Exe}" + (inSteam ? " [Steam]" : "") + (inPn ? " [Playnite]" : "");
                 var payload = new ScanPayload { Name = c.Name, Exe = c.Exe, StartDir = c.StartDir, AppId = appId };
                 var cb = new System.Windows.Controls.CheckBox { Content = summary, IsChecked = !(inSteam && inPn), Tag = payload };
@@ -663,8 +693,8 @@ public class ShortcutsLibrary : LibraryPlugin
                             found.AppName = name; found.Exe = exe; found.StartDir = startDir; updatedSteam++;
                         }
 
-                        var existing = FindExistingGameForShortcut(new SteamShortcut { AppName = name, Exe = exe, AppId = appId });
-                        if (existing == null)
+                        var existingAny = FindAnyExistingGameForShortcut(new SteamShortcut { AppName = name, Exe = exe, AppId = appId });
+                        if (existingAny == null)
                         {
                             var g = new Game
                             {
@@ -680,10 +710,9 @@ public class ShortcutsLibrary : LibraryPlugin
                         }
                         else
                         {
-                            existing.Name = name;
-                            existing.InstallDirectory = startDir;
-                            EnsureSteamPlayAction(existing, new SteamShortcut { AppName = name, Exe = exe, StartDir = startDir, AppId = appId });
-                            PlayniteApi.Database.Games.Update(existing);
+                            // Do not create a duplicate; ensure play action via Steam if desired
+                            EnsureSteamPlayAction(existingAny, new SteamShortcut { AppName = name, Exe = exe, StartDir = startDir, AppId = appId });
+                            PlayniteApi.Database.Games.Update(existingAny);
                             updatedPn++;
                         }
                     }
