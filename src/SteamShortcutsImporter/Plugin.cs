@@ -263,7 +263,7 @@ public class ShortcutsLibrary : LibraryPlugin
         {
             Name = "Play",
             Type = GameActionType.File,
-            Path = sc.Exe,
+            Path = sc.Exe?.Trim('"'),
             Arguments = sc.LaunchOptions,
             WorkingDir = sc.StartDir,
             IsPlayAction = true
@@ -403,12 +403,19 @@ public class ShortcutsLibrary : LibraryPlugin
                     foreach (var item in selected)
                     {
                         if (existing.ContainsKey(item.CalcAppId)) continue;
+                        var exePath = ExpandPathVariables(item.Game, item.Action.Path);
+                        var workDir = ExpandPathVariables(item.Game, item.Action.WorkingDir);
+                        if (string.IsNullOrWhiteSpace(workDir) && !string.IsNullOrWhiteSpace(exePath))
+                        {
+                            try { workDir = Path.GetDirectoryName(exePath) ?? string.Empty; } catch { }
+                        }
+                        var args = ExpandPathVariables(item.Game, item.Action.Arguments);
                         var sc = new SteamShortcut
                         {
                             AppName = item.Game.Name,
-                            Exe = item.Action.Path,
-                            StartDir = item.Action.WorkingDir ?? item.Game.InstallDirectory ?? string.Empty,
-                            LaunchOptions = item.Action.Arguments ?? string.Empty,
+                            Exe = exePath ?? string.Empty,
+                            StartDir = workDir ?? string.Empty,
+                            LaunchOptions = args ?? string.Empty,
                             AppId = item.CalcAppId,
                             Tags = null
                         };
@@ -683,9 +690,16 @@ public class ShortcutsLibrary : LibraryPlugin
                 var action = game.GameActions?.FirstOrDefault(a => a.IsPlayAction) ?? game.GameActions?.FirstOrDefault();
                 if (action != null && action.Type == GameActionType.File)
                 {
-                    sc.Exe = action.Path ?? sc.Exe;
-                    sc.LaunchOptions = action.Arguments ?? sc.LaunchOptions;
-                    sc.StartDir = action.WorkingDir ?? sc.StartDir;
+                    var exe = ExpandPathVariables(game, action.Path) ?? sc.Exe;
+                    var args = ExpandPathVariables(game, action.Arguments) ?? sc.LaunchOptions;
+                    var dir = ExpandPathVariables(game, action.WorkingDir);
+                    if (string.IsNullOrWhiteSpace(dir))
+                    {
+                        try { dir = Path.GetDirectoryName(exe) ?? sc.StartDir; } catch { dir = sc.StartDir; }
+                    }
+                    sc.Exe = exe;
+                    sc.LaunchOptions = args;
+                    sc.StartDir = dir ?? sc.StartDir;
                 }
                 if (game.TagIds?.Any() == true)
                 {
@@ -763,9 +777,16 @@ public class ShortcutsLibrary : LibraryPlugin
                 var action = game.GameActions?.FirstOrDefault(a => a.IsPlayAction) ?? game.GameActions?.FirstOrDefault();
                 if (action != null && action.Type == GameActionType.File)
                 {
-                    sc.Exe = action.Path ?? sc.Exe;
-                    sc.LaunchOptions = action.Arguments ?? sc.LaunchOptions;
-                    sc.StartDir = action.WorkingDir ?? sc.StartDir;
+                    var exe = ExpandPathVariables(game, action.Path) ?? sc.Exe;
+                    var args = ExpandPathVariables(game, action.Arguments) ?? sc.LaunchOptions;
+                    var dir = ExpandPathVariables(game, action.WorkingDir);
+                    if (string.IsNullOrWhiteSpace(dir))
+                    {
+                        try { dir = Path.GetDirectoryName(exe) ?? sc.StartDir; } catch { dir = sc.StartDir; }
+                    }
+                    sc.Exe = exe;
+                    sc.LaunchOptions = args;
+                    sc.StartDir = dir ?? sc.StartDir;
                 }
 
                 // Tags
@@ -876,6 +897,35 @@ public class ShortcutsLibrary : LibraryPlugin
         catch
         {
             return null;
+        }
+    }
+
+    private string? ExpandPathVariables(Game game, string? input)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return input;
+        try
+        {
+            var result = input;
+            // Replace Playnite placeholders we use: {InstallDir}
+            if (!string.IsNullOrEmpty(game.InstallDirectory))
+            {
+                result = result.Replace("{InstallDir}", game.InstallDirectory);
+            }
+            // Expand environment variables like %USERPROFILE%
+            result = Environment.ExpandEnvironmentVariables(result);
+
+            // Normalize quotes: remove surrounding quotes for path resolution
+            var unquoted = result.Trim('"');
+            // If path is relative and we have InstallDirectory, resolve it
+            if (!Path.IsPathRooted(unquoted) && !string.IsNullOrEmpty(game.InstallDirectory))
+            {
+                try { unquoted = Path.GetFullPath(Path.Combine(game.InstallDirectory, unquoted)); } catch { }
+            }
+            return unquoted;
+        }
+        catch
+        {
+            return input;
         }
     }
 
