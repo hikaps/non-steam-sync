@@ -223,6 +223,12 @@ internal static class Utils
         return crc | 0x80000000u;
     }
 
+    public static ulong ToShortcutGameId( uint appId )
+    {
+        // 64-bit game id for shortcuts: (appid << 32) | 0x02000000
+        return ((ulong)appId << 32) | 0x02000000UL;
+    }
+
     private static uint[]? _crcTable;
     private static uint[] Crc32Table => _crcTable ??= BuildCrc32Table();
     private static uint[] BuildCrc32Table()

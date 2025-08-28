@@ -239,11 +239,12 @@ public class ShortcutsLibrary : LibraryPlugin
     {
         if (sc.AppId != 0)
         {
+            var gid = Utils.ToShortcutGameId(sc.AppId);
             return new GameAction
             {
                 Name = "Play (Steam)",
                 Type = GameActionType.URL,
-                Path = $"steam://rungameid/{sc.AppId}",
+                Path = $"steam://rungameid/{gid}",
                 IsPlayAction = true
             };
         }
@@ -267,7 +268,7 @@ public class ShortcutsLibrary : LibraryPlugin
                 return;
             }
 
-            var expectedUrl = $"steam://rungameid/{sc.AppId}";
+            var expectedUrl = $"steam://rungameid/{Utils.ToShortcutGameId(sc.AppId)}";
             var current = game.GameActions?.FirstOrDefault(a => a.IsPlayAction);
             var needsUpdate = current == null || current.Type != GameActionType.URL || !string.Equals(current.Path, expectedUrl, StringComparison.OrdinalIgnoreCase);
 
