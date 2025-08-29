@@ -291,8 +291,9 @@ public class ShortcutsLibrary : LibraryPlugin
                 try
                 {
                     var selected = checkBoxes.Where(c => c.IsChecked == true).Select(c => (SteamShortcut)c.Tag).ToList();
-                    var imported = ImportShortcutsToPlaynite(selected, vdfPath!);
-                    PlayniteApi.Dialogs.ShowMessage($"Imported {imported} item(s) from Steam.", Name);
+                    var imported = ImportShortcutsToPlaynite(selected, vdfPath!, out var skipped);
+                    var msg = skipped > 0 ? $"Imported {imported} item(s). Skipped {skipped} existing item(s)." : $"Imported {imported} item(s) from Steam.";
+                    PlayniteApi.Dialogs.ShowMessage(msg, Name);
                     window.DialogResult = true; window.Close();
                 }
                 catch (Exception ex)
@@ -311,7 +312,7 @@ public class ShortcutsLibrary : LibraryPlugin
         }
     }
 
-    private int ImportShortcutsToPlaynite(List<SteamShortcut> shortcuts, string vdfPath)
+    private int ImportShortcutsToPlaynite(List<SteamShortcut> shortcuts, string vdfPath, out int skipped)
     {
         var existingById = PlayniteApi.Database.Games
             .Where(g => g.PluginId == Id && !string.IsNullOrEmpty(g.GameId))
@@ -319,17 +320,18 @@ public class ShortcutsLibrary : LibraryPlugin
 
         var newGames = new List<Game>();
         var detector = new DuplicateDetector(this);
+        skipped = 0;
         foreach (var sc in shortcuts)
         {
             // Skip if an equivalent game already exists in Playnite (any library)
             if (detector.ExistsAnyGameMatch(sc))
             {
-                continue;
+                skipped++; continue;
             }
             var id = string.IsNullOrEmpty(sc.StableId) ? sc.AppId.ToString() : sc.StableId;
             if (string.IsNullOrEmpty(id) || existingById.ContainsKey(id))
             {
-                continue;
+                skipped++; continue;
             }
             var g = new Game
             {
