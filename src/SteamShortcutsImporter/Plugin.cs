@@ -147,6 +147,19 @@ public class ShortcutsLibrary : LibraryPlugin
             Logger.Error(ex, "Failed to initialize plugin settings.");
             settings = new PluginSettings(this) { SteamRootPath = string.Empty };
         }
+
+        try
+        {
+            // Listen for game updates to sync back changes (write-back)
+            if (PlayniteApi != null && PlayniteApi.Database != null)
+            {
+                PlayniteApi.Database.Games.ItemUpdated += Games_ItemUpdated;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex, "Failed to attach Games.ItemUpdated handler.");
+        }
     }
 
     public override Guid Id => pluginId;
@@ -798,6 +811,32 @@ public class ShortcutsLibrary : LibraryPlugin
         };
     }
 
+    private void EnsureSteamPlayAction(Game game, SteamShortcut sc)
+    {
+        try
+        {
+            if (!settings.LaunchViaSteam || sc.AppId == 0)
+            {
+                return;
+            }
+
+            var expectedUrl = $"steam://rungameid/{Utils.ToShortcutGameId(sc.AppId)}";
+            var current = game.GameActions?.FirstOrDefault(a => a.IsPlayAction);
+            var needsUpdate = current == null || current.Type != GameActionType.URL || !string.Equals(current.Path, expectedUrl, StringComparison.OrdinalIgnoreCase);
+
+            if (needsUpdate)
+            {
+                game.IsInstalled = true;
+                game.GameActions = new System.Collections.ObjectModel.ObservableCollection<GameAction>(new[] { BuildPlayAction(sc) });
+                PlayniteApi.Database.Games.Update(game);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn(ex, $"Failed to ensure Steam play action for game '{game.Name}'");
+        }
+    }
+
     private string? ResolveShortcutsVdfPath()
     {
         try
@@ -826,5 +865,95 @@ public class ShortcutsLibrary : LibraryPlugin
             Logger.Error(ex, "Failed to resolve shortcuts.vdf path.");
         }
         return null;
+    }
+
+    private void Games_ItemUpdated(object sender, ItemUpdatedEventArgs<Game> e)
+    {
+        // Persist changes from Playnite back to shortcuts.vdf for this library's games
+        try
+        {
+            var vdfPath = ResolveShortcutsVdfPath();
+            if (string.IsNullOrWhiteSpace(vdfPath) || !File.Exists(vdfPath))
+            {
+                return;
+            }
+
+            var shortcuts = ShortcutsFile.Read(vdfPath!).ToList();
+            var byStable = shortcuts.ToDictionary(s => s.StableId, s => s, StringComparer.OrdinalIgnoreCase);
+            var byApp = shortcuts.ToDictionary(s => s.AppId.ToString(), s => s, StringComparer.OrdinalIgnoreCase);
+            bool changed = false;
+
+            foreach (var upd in e.UpdatedItems)
+            {
+                var game = upd.NewData;
+                if (game.PluginId != Id)
+                {
+                    continue;
+                }
+
+                SteamShortcut sc = null;
+                var gid = game.GameId ?? string.Empty;
+                if (!string.IsNullOrEmpty(gid))
+                {
+                    if (!byStable.TryGetValue(gid, out sc))
+                    {
+                        byApp.TryGetValue(gid, out sc);
+                    }
+                }
+                if (sc == null)
+                {
+                    continue;
+                }
+
+                sc.AppName = game.Name;
+                var act = game.GameActions?.FirstOrDefault(a => a.IsPlayAction) ?? game.GameActions?.FirstOrDefault();
+                if (act != null && act.Type == GameActionType.File)
+                {
+                    var exe = ExpandPathVariables(game, act.Path) ?? sc.Exe;
+                    var args = ExpandPathVariables(game, act.Arguments) ?? sc.LaunchOptions;
+                    var dir = ExpandPathVariables(game, act.WorkingDir);
+                    if (string.IsNullOrWhiteSpace(dir))
+                    {
+                        try { dir = Path.GetDirectoryName(exe) ?? sc.StartDir; } catch { dir = sc.StartDir; }
+                    }
+                    sc.Exe = exe;
+                    sc.LaunchOptions = args;
+                    sc.StartDir = dir ?? sc.StartDir;
+                }
+
+                if (game.TagIds?.Any() == true)
+                {
+                    sc.Tags = game.TagIds
+                        .Select(id => PlayniteApi.Database.Tags.Get(id)?.Name)
+                        .Where(n => !string.IsNullOrWhiteSpace(n))
+                        .Select(n => n!)
+                        .Distinct()
+                        .ToList();
+                }
+
+                if (sc.AppId == 0)
+                {
+                    sc.AppId = Utils.GenerateShortcutAppId(sc.Exe, sc.AppName);
+                }
+
+                // Normalize play action to Steam URL when enabled
+                EnsureSteamPlayAction(game, sc);
+
+                // Export updated artwork to grid
+                var gridDir = TryGetGridDirFromVdf(vdfPath!);
+                TryExportArtworkToGrid(game, sc.AppId, gridDir);
+
+                changed = true;
+            }
+
+            if (changed)
+            {
+                ShortcutsFile.Write(vdfPath!, shortcuts);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex, "Failed to sync back to shortcuts.vdf");
+        }
     }
 }
