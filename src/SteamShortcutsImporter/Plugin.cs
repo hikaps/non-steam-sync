@@ -131,6 +131,7 @@ public class PluginSettingsView : System.Windows.Controls.UserControl
 public class ShortcutsLibrary : LibraryPlugin
 {
     private static readonly ILogger Logger = LogManager.GetLogger();
+    private const string MenuSection = "@Steam Shortcuts";
 
     private readonly PluginSettings settings;
     private readonly Guid pluginId = Guid.Parse("f15771cd-b6d7-4a3d-9b8e-08786a13d9c7");
@@ -165,13 +166,13 @@ public class ShortcutsLibrary : LibraryPlugin
         yield return new MainMenuItem
         {
             Description = "Steam Shortcuts: Sync Steam → Playnite…",
-            MenuSection = "@Steam Shortcuts",
+            MenuSection = MenuSection,
             Action = _ => { ShowImportDialog(); }
         };
         yield return new MainMenuItem
         {
             Description = "Steam Shortcuts: Sync Playnite → Steam…",
-            MenuSection = "@Steam Shortcuts",
+            MenuSection = MenuSection,
             Action = _ => { ShowAddToSteamDialog(); }
         };
     }
@@ -193,70 +194,75 @@ public class ShortcutsLibrary : LibraryPlugin
         try
         {
             var shortcuts = ShortcutsFile.Read(vdfPath!).ToList();
-            var existingById = PlayniteApi.Database.Games
-                .Where(g => g.PluginId == Id && !string.IsNullOrEmpty(g.GameId))
-                .ToDictionary(g => g.GameId, g => g, StringComparer.OrdinalIgnoreCase);
-
-            var newGames = new List<Game>();
-            foreach (var sc in shortcuts)
-            {
-                var id = string.IsNullOrEmpty(sc.StableId) ? sc.AppId.ToString() : sc.StableId;
-                if (string.IsNullOrEmpty(id) || existingById.ContainsKey(id))
-                {
-                    continue;
-                }
-                var g = new Game
-                {
-                    PluginId = Id,
-                    GameId = id,
-                    Name = sc.AppName,
-                    InstallDirectory = string.IsNullOrEmpty(sc.StartDir) ? null : sc.StartDir,
-                    IsInstalled = true,
-                    GameActions = new System.Collections.ObjectModel.ObservableCollection<GameAction>(new[] { BuildPlayAction(sc) })
-                };
-                if (sc.Tags?.Any() == true)
-                {
-                    g.TagIds = new List<Guid>();
-                    foreach (var tagName in sc.Tags.Distinct())
-                    {
-                        var tag = PlayniteApi.Database.Tags.Add(tagName);
-                        g.TagIds.Add(tag.Id);
-                    }
-                }
-                newGames.Add(g);
-            }
-
-            if (newGames.Count > 0)
-            {
-                PlayniteApi.Database.Games.Add(newGames);
-                try
-                {
-                    var gridDir = TryGetGridDirFromVdf(vdfPath!);
-                    if (!string.IsNullOrEmpty(gridDir) && Directory.Exists(gridDir))
-                    {
-                        foreach (var g in newGames)
-                        {
-                            var sc = shortcuts.FirstOrDefault(s => s.StableId == g.GameId || s.AppId.ToString() == g.GameId);
-                            if (sc != null)
-                            {
-                                TryImportArtworkFromGrid(g, sc.AppId, gridDir!);
-                            }
-                        }
-                    }
-                }
-                catch (Exception aex)
-                {
-                    Logger.Warn(aex, "Artwork import from grid failed.");
-                }
-            }
-
-            PlayniteApi.Dialogs.ShowMessage($"Imported {newGames.Count} item(s) from Steam.", Name);
+            var imported = ImportShortcutsToPlaynite(shortcuts, vdfPath!);
+            PlayniteApi.Dialogs.ShowMessage($"Imported {imported} item(s) from Steam.", Name);
         }
         catch (Exception ex)
         {
             Logger.Error(ex, "Failed to import from shortcuts.vdf");
             PlayniteApi.Dialogs.ShowErrorMessage($"Import failed: {ex.Message}", Name);
         }
+    }
+
+    private int ImportShortcutsToPlaynite(List<SteamShortcut> shortcuts, string vdfPath)
+    {
+        var existingById = PlayniteApi.Database.Games
+            .Where(g => g.PluginId == Id && !string.IsNullOrEmpty(g.GameId))
+            .ToDictionary(g => g.GameId, g => g, StringComparer.OrdinalIgnoreCase);
+
+        var newGames = new List<Game>();
+        foreach (var sc in shortcuts)
+        {
+            var id = string.IsNullOrEmpty(sc.StableId) ? sc.AppId.ToString() : sc.StableId;
+            if (string.IsNullOrEmpty(id) || existingById.ContainsKey(id))
+            {
+                continue;
+            }
+            var g = new Game
+            {
+                PluginId = Id,
+                GameId = id,
+                Name = sc.AppName,
+                InstallDirectory = string.IsNullOrEmpty(sc.StartDir) ? null : sc.StartDir,
+                IsInstalled = true,
+                GameActions = new System.Collections.ObjectModel.ObservableCollection<GameAction>(new[] { BuildPlayAction(sc) })
+            };
+            if (sc.Tags?.Any() == true)
+            {
+                g.TagIds = new List<Guid>();
+                foreach (var tagName in sc.Tags.Distinct())
+                {
+                    var tag = PlayniteApi.Database.Tags.Add(tagName);
+                    g.TagIds.Add(tag.Id);
+                }
+            }
+            newGames.Add(g);
+        }
+
+        if (newGames.Count > 0)
+        {
+            PlayniteApi.Database.Games.Add(newGames);
+            try
+            {
+                var gridDir = TryGetGridDirFromVdf(vdfPath);
+                if (!string.IsNullOrEmpty(gridDir) && Directory.Exists(gridDir))
+                {
+                    foreach (var g in newGames)
+                    {
+                        var sc = shortcuts.FirstOrDefault(s => s.StableId == g.GameId || s.AppId.ToString() == g.GameId);
+                        if (sc != null)
+                        {
+                            TryImportArtworkFromGrid(g, sc.AppId, gridDir!);
+                        }
+                    }
+                }
+            }
+            catch (Exception aex)
+            {
+                Logger.Warn(aex, "Artwork import from grid failed.");
+            }
+        }
+        return newGames.Count;
     }
 
     private void ShowAddToSteamDialog()
