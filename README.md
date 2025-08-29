@@ -1,37 +1,33 @@
 Playnite Extension: Steam Shortcuts Importer
 
 What It Does
-- Imports your non‑Steam games from Steam’s “shortcuts” into Playnite.
-- Syncs changes both ways on demand:
+- Import your non‑Steam games from Steam’s “shortcuts” into Playnite.
+- Sync both ways when you want:
   - Steam → Playnite: import selected shortcuts as Playnite games.
   - Playnite → Steam: create/update selected shortcuts in Steam.
-- Optional: automatically writes changes you make in Playnite back to Steam (including grid artwork).
-
-Requirements
-- Windows with Steam installed.
-- Playnite 10 (library plugin). Tested with net462 target.
+- Optional: automatically write your Playnite edits back to Steam (including grid artwork).
 
 Install
-- Download the latest `.pext` from the GitHub Releases page (SteamShortcutsImporter-<version>.pext).
-- In Playnite: Add-ons → Install from file… → select the downloaded `.pext`.
+- Download the latest `.pext` from Releases (SteamShortcutsImporter-<version>.pext).
+- In Playnite: Add‑ons → Install from file… → choose the `.pext`.
 - Restart Playnite if prompted.
 
 Setup (first run)
-- Open Add-ons → Extensions → Steam Shortcuts.
-- Set Steam root folder (for example `C:\\Program Files (x86)\\Steam`).
-- Optional: enable “Launch via Steam” to launch through `steam://rungameid/...` when possible.
+- Add‑ons → Extensions → Steam Shortcuts.
+- Set your Steam folder (e.g., `C:\\Program Files (x86)\\Steam`).
+- Optional: enable “Launch via Steam” to launch via `steam://rungameid/...` when possible.
 
 How To Use
-- Steam → Playnite:
+- Steam → Playnite
   - Main menu → Steam Shortcuts → “Sync Steam → Playnite…”.
-  - Use the filter and checkboxes to pick items; duplicates are flagged and left unchecked.
-  - Click Import. Artwork is pulled from Steam’s grid when available.
-- Playnite → Steam:
+  - Preview covers/icons, filter by text, show “Only new”, invert selection; the selected count updates live.
+  - Click Import. The extension skips existing items and pulls artwork from Steam’s grid when available.
+- Playnite → Steam
   - Main menu → Steam Shortcuts → “Sync Playnite → Steam…”.
-  - Pick Playnite games with a file play action to export. Existing Steam entries are updated.
-  - Artwork (cover/icon/background) is exported into Steam’s grid folder.
-- Automatic write‑backs (optional):
-  - When enabled, editing a game from this library in Playnite (name, play action, tags, artwork) will update `shortcuts.vdf` and Steam grid files automatically.
+  - Pick Playnite games with a file play action to export; existing Steam entries are updated.
+  - Covers/icons/backgrounds are exported into Steam’s grid folder.
+- Automatic write‑backs (optional)
+  - When enabled, editing a Steam Shortcuts game in Playnite (name/play action/tags/artwork) updates `shortcuts.vdf` and Steam grid files automatically.
 
 Troubleshooting
 - “No shortcuts found” or nothing imports:
