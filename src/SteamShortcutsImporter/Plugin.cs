@@ -228,6 +228,8 @@ public class ShortcutsLibrary : LibraryPlugin
             topBar.Children.Add(searchBar);
             topBar.Children.Add(btnSelectAll);
             topBar.Children.Add(btnSelectNone);
+            var statusText = new System.Windows.Controls.TextBlock { Margin = new System.Windows.Thickness(16, 0, 0, 0), VerticalAlignment = System.Windows.VerticalAlignment.Center, Opacity = 0.8 };
+            topBar.Children.Add(statusText);
 
             var listHost = new System.Windows.Controls.StackPanel();
             listHost.Children.Add(topBar);
@@ -275,16 +277,19 @@ public class ShortcutsLibrary : LibraryPlugin
                         Tag = sc,
                         Margin = new System.Windows.Thickness(0, 4, 0, 4)
                     };
+                    cb.Checked += (_, __) => UpdateStatus();
+                    cb.Unchecked += (_, __) => UpdateStatus();
                     checkBoxes.Add(cb);
                     listPanel.Children.Add(cb);
                 }
+                UpdateStatus();
             }
 
             searchBar.TextChanged += (_, __) => RefreshList();
             RefreshList();
 
-            btnSelectAll.Click += (_, __) => { foreach (var cb in checkBoxes) cb.IsChecked = true; };
-            btnSelectNone.Click += (_, __) => { foreach (var cb in checkBoxes) cb.IsChecked = false; };
+            btnSelectAll.Click += (_, __) => { foreach (var cb in checkBoxes) cb.IsChecked = true; UpdateStatus(); };
+            btnSelectNone.Click += (_, __) => { foreach (var cb in checkBoxes) cb.IsChecked = false; UpdateStatus(); };
             btnCancel.Click += (_, __) => { window.DialogResult = false; window.Close(); };
             btnImport.Click += (_, __) =>
             {
@@ -304,6 +309,13 @@ public class ShortcutsLibrary : LibraryPlugin
             };
 
             window.ShowDialog();
+
+            void UpdateStatus()
+            {
+                int selected = checkBoxes.Count(c => c.IsChecked == true);
+                int total = checkBoxes.Count;
+                statusText.Text = $"Selected: {selected} / {total}";
+            }
         }
         catch (Exception ex)
         {
@@ -384,13 +396,6 @@ public class ShortcutsLibrary : LibraryPlugin
     {
         var detector = new DuplicateDetector(this);
         return detector.ExistsAnyGameMatch(sc);
-    }
-
-    private static string NormalizePath(string input)
-    {
-        if (string.IsNullOrWhiteSpace(input)) return string.Empty;
-        var unq = input.Trim('"');
-        try { return Path.GetFullPath(unq); } catch { return unq; }
     }
 
     private sealed class DuplicateDetector
@@ -504,6 +509,8 @@ public class ShortcutsLibrary : LibraryPlugin
             topBar.Children.Add(searchBar);
             topBar.Children.Add(btnSelectAll);
             topBar.Children.Add(btnSelectNone);
+            var statusText = new System.Windows.Controls.TextBlock { Margin = new System.Windows.Thickness(16, 0, 0, 0), VerticalAlignment = System.Windows.VerticalAlignment.Center, Opacity = 0.8 };
+            topBar.Children.Add(statusText);
 
             var listHost = new System.Windows.Controls.StackPanel();
             listHost.Children.Add(topBar);
@@ -548,16 +555,19 @@ public class ShortcutsLibrary : LibraryPlugin
                     var inSteam = existingShortcuts.ContainsKey(appId);
                     var summary = $"{name} — {exePath}" + (inSteam ? " [Steam]" : string.Empty);
                     var cb = new System.Windows.Controls.CheckBox { Content = summary, IsChecked = !inSteam, Tag = g, Margin = new System.Windows.Thickness(0, 4, 0, 4) };
+                    cb.Checked += (_, __) => UpdateStatus();
+                    cb.Unchecked += (_, __) => UpdateStatus();
                     checks.Add(cb);
                     listPanel.Children.Add(cb);
                 }
+                UpdateStatus();
             }
 
             searchBar.TextChanged += (_, __) => Refresh();
             Refresh();
 
-            btnSelectAll.Click += (_, __) => { foreach (var c in checks) c.IsChecked = true; };
-            btnSelectNone.Click += (_, __) => { foreach (var c in checks) c.IsChecked = false; };
+            btnSelectAll.Click += (_, __) => { foreach (var c in checks) c.IsChecked = true; UpdateStatus(); };
+            btnSelectNone.Click += (_, __) => { foreach (var c in checks) c.IsChecked = false; UpdateStatus(); };
             btnCancel.Click += (_, __) => { window.DialogResult = false; window.Close(); };
             btnExport.Click += (_, __) =>
             {
@@ -575,6 +585,13 @@ public class ShortcutsLibrary : LibraryPlugin
             };
 
             window.ShowDialog();
+
+            void UpdateStatus()
+            {
+                int selected = checks.Count(c => c.IsChecked == true);
+                int total = checks.Count;
+                statusText.Text = $"Selected: {selected} / {total}";
+            }
         }
         catch (Exception ex)
         {
