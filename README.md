@@ -33,12 +33,6 @@ How To Use
 - Automatic write‑backs (optional):
   - When enabled, editing a game from this library in Playnite (name, play action, tags, artwork) will update `shortcuts.vdf` and Steam grid files automatically.
 
-Duplicate Handling
-- The importer avoids duplicates by checking:
-  - Existing library IDs (stable id/appid string).
-  - Name + executable path (resolves `{InstallDir}` and environment variables).
-  - Name + Steam URL (`steam://rungameid/<gameid64>`).
-
 Troubleshooting
 - “No shortcuts found” or nothing imports:
   - Check the Steam root path in settings. The plugin searches `userdata/<steamid>/config/shortcuts.vdf`.
