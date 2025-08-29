@@ -401,7 +401,7 @@ public class ShortcutsLibrary : LibraryPlugin
                 }
 
                 // 2) Name + File path match across all games
-                var scExeNorm = NormalizePath(sc.Exe);
+                var scExeNorm = DuplicateUtils.NormalizePath(sc.Exe);
                 if (!string.IsNullOrEmpty(scExeNorm))
                 {
                     foreach (var g in lib.PlayniteApi.Database.Games.Where(x => string.Equals(x.Name, sc.AppName, StringComparison.OrdinalIgnoreCase)))
@@ -410,7 +410,7 @@ public class ShortcutsLibrary : LibraryPlugin
                         if (act?.Type == GameActionType.File && !string.IsNullOrEmpty(act.Path))
                         {
                             var exe = lib.ExpandPathVariables(g, act.Path) ?? string.Empty;
-                            var exeNorm = NormalizePath(exe);
+                            var exeNorm = DuplicateUtils.NormalizePath(exe);
                             if (string.Equals(exeNorm, scExeNorm, StringComparison.OrdinalIgnoreCase))
                             {
                                 return true;
@@ -423,7 +423,7 @@ public class ShortcutsLibrary : LibraryPlugin
                 var appId = sc.AppId != 0 ? sc.AppId : Utils.GenerateShortcutAppId(sc.Exe ?? string.Empty, sc.AppName ?? string.Empty);
                 if (appId != 0)
                 {
-                    var expectedUrl = $"steam://rungameid/{Utils.ToShortcutGameId(appId)}";
+                    var expectedUrl = DuplicateUtils.ExpectedRungameUrl(appId);
                     foreach (var g in lib.PlayniteApi.Database.Games.Where(x => string.Equals(x.Name, sc.AppName, StringComparison.OrdinalIgnoreCase)))
                     {
                         var act = g.GameActions?.FirstOrDefault(a => a.IsPlayAction) ?? g.GameActions?.FirstOrDefault();
