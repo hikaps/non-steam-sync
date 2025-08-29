@@ -1,5 +1,8 @@
 name: release
 
+permissions:
+  contents: write
+
 on:
   push:
     tags:
@@ -47,4 +50,3 @@ jobs:
             SteamShortcutsImporter-*.pext
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
