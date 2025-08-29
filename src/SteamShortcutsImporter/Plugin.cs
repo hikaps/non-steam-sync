@@ -318,8 +318,14 @@ public class ShortcutsLibrary : LibraryPlugin
             .ToDictionary(g => g.GameId, g => g, StringComparer.OrdinalIgnoreCase);
 
         var newGames = new List<Game>();
+        var detector = new DuplicateDetector(this);
         foreach (var sc in shortcuts)
         {
+            // Skip if an equivalent game already exists in Playnite (any library)
+            if (detector.ExistsAnyGameMatch(sc))
+            {
+                continue;
+            }
             var id = string.IsNullOrEmpty(sc.StableId) ? sc.AppId.ToString() : sc.StableId;
             if (string.IsNullOrEmpty(id) || existingById.ContainsKey(id))
             {
