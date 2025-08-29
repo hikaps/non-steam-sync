@@ -194,8 +194,101 @@ public class ShortcutsLibrary : LibraryPlugin
         try
         {
             var shortcuts = ShortcutsFile.Read(vdfPath!).ToList();
-            var imported = ImportShortcutsToPlaynite(shortcuts, vdfPath!);
-            PlayniteApi.Dialogs.ShowMessage($"Imported {imported} item(s) from Steam.", Name);
+
+            var window = PlayniteApi.Dialogs.CreateWindow(new WindowCreationOptions { ShowCloseButton = true });
+            window.Title = "Steam Shortcuts — Select Items to Import";
+            window.Width = 900;
+            window.Height = 650;
+            window.MinWidth = 720;
+            window.MinHeight = 480;
+
+            var grid = new System.Windows.Controls.Grid();
+            grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = new System.Windows.GridLength(1, System.Windows.GridUnitType.Star) });
+            grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = System.Windows.GridLength.Auto });
+
+            var topBar = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, Margin = new System.Windows.Thickness(12, 12, 12, 6) };
+            var lblFilter = new System.Windows.Controls.TextBlock { Text = "Filter:", Margin = new System.Windows.Thickness(0, 0, 8, 0), VerticalAlignment = System.Windows.VerticalAlignment.Center };
+            var searchBar = new System.Windows.Controls.TextBox { Width = 320, Margin = new System.Windows.Thickness(0, 0, 16, 0) };
+            var btnSelectAll = new System.Windows.Controls.Button { Content = "Select All", Margin = new System.Windows.Thickness(0, 0, 8, 0), MinWidth = 100 };
+            var btnSelectNone = new System.Windows.Controls.Button { Content = "Deselect All", MinWidth = 100 };
+            topBar.Children.Add(lblFilter);
+            topBar.Children.Add(searchBar);
+            topBar.Children.Add(btnSelectAll);
+            topBar.Children.Add(btnSelectNone);
+
+            var listHost = new System.Windows.Controls.StackPanel();
+            listHost.Children.Add(topBar);
+            var listPanel = new System.Windows.Controls.StackPanel { Margin = new System.Windows.Thickness(12, 0, 12, 0) };
+            var scroll = new System.Windows.Controls.ScrollViewer { Content = listPanel, VerticalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto };
+            listHost.Children.Add(scroll);
+            System.Windows.Controls.Grid.SetRow(listHost, 0);
+            grid.Children.Add(listHost);
+
+            var bottomBar = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, Margin = new System.Windows.Thickness(12, 6, 12, 12), HorizontalAlignment = System.Windows.HorizontalAlignment.Right };
+            var btnImport = new System.Windows.Controls.Button { Content = "Import", Margin = new System.Windows.Thickness(0, 0, 8, 0), MinWidth = 100 };
+            var btnCancel = new System.Windows.Controls.Button { Content = "Cancel", MinWidth = 100 };
+            bottomBar.Children.Add(btnImport);
+            bottomBar.Children.Add(btnCancel);
+            System.Windows.Controls.Grid.SetRow(bottomBar, 1);
+            grid.Children.Add(bottomBar);
+
+            window.Content = grid;
+
+            var checkBoxes = new List<System.Windows.Controls.CheckBox>();
+
+            void RefreshList()
+            {
+                var filter = searchBar.Text?.Trim() ?? string.Empty;
+                listPanel.Children.Clear();
+                checkBoxes.Clear();
+                foreach (var sc in shortcuts)
+                {
+                    if (!string.IsNullOrEmpty(filter) && sc.AppName?.IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0)
+                    {
+                        continue;
+                    }
+                    var summary = $"{sc.AppName} — {sc.Exe}";
+                    var existsAny = ExistsAnyGameMatch(sc);
+                    if (existsAny)
+                    {
+                        summary += " [Playnite]";
+                    }
+                    var isAlready = !string.IsNullOrEmpty(sc.StableId) && PlayniteApi.Database.Games.Any(g => g.PluginId == Id && string.Equals(g.GameId, sc.StableId, StringComparison.OrdinalIgnoreCase));
+                    var cb = new System.Windows.Controls.CheckBox
+                    {
+                        Content = summary,
+                        IsChecked = !isAlready && !existsAny,
+                        Tag = sc,
+                        Margin = new System.Windows.Thickness(0, 4, 0, 4)
+                    };
+                    checkBoxes.Add(cb);
+                    listPanel.Children.Add(cb);
+                }
+            }
+
+            searchBar.TextChanged += (_, __) => RefreshList();
+            RefreshList();
+
+            btnSelectAll.Click += (_, __) => { foreach (var cb in checkBoxes) cb.IsChecked = true; };
+            btnSelectNone.Click += (_, __) => { foreach (var cb in checkBoxes) cb.IsChecked = false; };
+            btnCancel.Click += (_, __) => { window.DialogResult = false; window.Close(); };
+            btnImport.Click += (_, __) =>
+            {
+                try
+                {
+                    var selected = checkBoxes.Where(c => c.IsChecked == true).Select(c => (SteamShortcut)c.Tag).ToList();
+                    var imported = ImportShortcutsToPlaynite(selected, vdfPath!);
+                    PlayniteApi.Dialogs.ShowMessage($"Imported {imported} item(s) from Steam.", Name);
+                    window.DialogResult = true; window.Close();
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error(ex, "Failed to import selected shortcuts.");
+                    PlayniteApi.Dialogs.ShowErrorMessage($"Import failed: {ex.Message}", Name);
+                }
+            };
+
+            window.ShowDialog();
         }
         catch (Exception ex)
         {
@@ -265,6 +358,41 @@ public class ShortcutsLibrary : LibraryPlugin
         return newGames.Count;
     }
 
+    private bool ExistsAnyGameMatch(SteamShortcut sc)
+    {
+        try
+        {
+            var byName = PlayniteApi.Database.Games.Where(x => string.Equals(x.Name, sc.AppName, StringComparison.OrdinalIgnoreCase));
+            var appId = sc.AppId != 0 ? sc.AppId : Utils.GenerateShortcutAppId(sc.Exe ?? string.Empty, sc.AppName ?? string.Empty);
+            var expectedUrl = appId != 0 ? $"steam://rungameid/{Utils.ToShortcutGameId(appId)}" : null;
+            foreach (var g in byName)
+            {
+                var act = g.GameActions?.FirstOrDefault(a => a.IsPlayAction) ?? g.GameActions?.FirstOrDefault();
+                if (act == null)
+                {
+                    continue;
+                }
+                if (act.Type == GameActionType.File)
+                {
+                    var exe = (act.Path ?? string.Empty).Trim('"');
+                    if (string.Equals(exe, (sc.Exe ?? string.Empty).Trim('"'), StringComparison.OrdinalIgnoreCase))
+                    {
+                        return true;
+                    }
+                }
+                else if (act.Type == GameActionType.URL && !string.IsNullOrEmpty(expectedUrl))
+                {
+                    if (string.Equals(act.Path ?? string.Empty, expectedUrl, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+        catch { }
+        return false;
+    }
+
     private void ShowAddToSteamDialog()
     {
         var vdfPath = ResolveShortcutsVdfPath();
@@ -275,8 +403,101 @@ public class ShortcutsLibrary : LibraryPlugin
         }
         try
         {
-            var games = PlayniteApi.Database.Games.Where(g => !g.Hidden).ToList();
-            AddGamesToSteam(games);
+            var allGames = PlayniteApi.Database.Games.Where(g => !g.Hidden).ToList();
+            var shortcuts = File.Exists(vdfPath) ? ShortcutsFile.Read(vdfPath!).ToList() : new List<SteamShortcut>();
+            var existingShortcuts = shortcuts.ToDictionary(s => s.AppId, s => s);
+
+            var window = PlayniteApi.Dialogs.CreateWindow(new WindowCreationOptions { ShowCloseButton = true });
+            window.Title = "Steam Shortcuts — Select Items to Export";
+            window.Width = 900;
+            window.Height = 650;
+            window.MinWidth = 720;
+            window.MinHeight = 480;
+
+            var grid = new System.Windows.Controls.Grid();
+            grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = new System.Windows.GridLength(1, System.Windows.GridUnitType.Star) });
+            grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = System.Windows.GridLength.Auto });
+
+            var topBar = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, Margin = new System.Windows.Thickness(12, 12, 12, 6) };
+            var lblFilter = new System.Windows.Controls.TextBlock { Text = "Filter:", Margin = new System.Windows.Thickness(0, 0, 8, 0), VerticalAlignment = System.Windows.VerticalAlignment.Center };
+            var searchBar = new System.Windows.Controls.TextBox { Width = 320, Margin = new System.Windows.Thickness(0, 0, 16, 0) };
+            var btnSelectAll = new System.Windows.Controls.Button { Content = "Select All", Margin = new System.Windows.Thickness(0, 0, 8, 0), MinWidth = 100 };
+            var btnSelectNone = new System.Windows.Controls.Button { Content = "Deselect All", MinWidth = 100 };
+            topBar.Children.Add(lblFilter);
+            topBar.Children.Add(searchBar);
+            topBar.Children.Add(btnSelectAll);
+            topBar.Children.Add(btnSelectNone);
+
+            var listHost = new System.Windows.Controls.StackPanel();
+            listHost.Children.Add(topBar);
+            var listPanel = new System.Windows.Controls.StackPanel { Margin = new System.Windows.Thickness(12, 0, 12, 0) };
+            var scroll = new System.Windows.Controls.ScrollViewer { Content = listPanel, VerticalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto };
+            listHost.Children.Add(scroll);
+            System.Windows.Controls.Grid.SetRow(listHost, 0);
+            grid.Children.Add(listHost);
+
+            var bottom = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, Margin = new System.Windows.Thickness(12, 6, 12, 12), HorizontalAlignment = System.Windows.HorizontalAlignment.Right };
+            var btnExport = new System.Windows.Controls.Button { Content = "Create/Update Selected", Margin = new System.Windows.Thickness(0, 0, 8, 0), MinWidth = 150 };
+            var btnCancel = new System.Windows.Controls.Button { Content = "Cancel", MinWidth = 100 };
+            bottom.Children.Add(btnExport);
+            bottom.Children.Add(btnCancel);
+            System.Windows.Controls.Grid.SetRow(bottom, 1);
+            grid.Children.Add(bottom);
+
+            window.Content = grid;
+
+            var checks = new List<System.Windows.Controls.CheckBox>();
+
+            void Refresh()
+            {
+                var filter = searchBar.Text?.Trim() ?? string.Empty;
+                listPanel.Children.Clear();
+                checks.Clear();
+
+                foreach (var g in allGames)
+                {
+                    var act = g.GameActions?.FirstOrDefault(a => a.IsPlayAction) ?? g.GameActions?.FirstOrDefault();
+                    if (act == null || act.Type != GameActionType.File || string.IsNullOrEmpty(act.Path))
+                    {
+                        continue;
+                    }
+                    var exePath = ExpandPathVariables(g, act.Path) ?? string.Empty;
+                    var name = string.IsNullOrEmpty(g.Name) ? (Path.GetFileNameWithoutExtension(exePath) ?? string.Empty) : g.Name;
+                    if (!string.IsNullOrEmpty(filter) && name.IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0)
+                    {
+                        continue;
+                    }
+                    var appId = Utils.GenerateShortcutAppId(exePath, name);
+                    var inSteam = existingShortcuts.ContainsKey(appId);
+                    var summary = $"{name} — {exePath}" + (inSteam ? " [Steam]" : string.Empty);
+                    var cb = new System.Windows.Controls.CheckBox { Content = summary, IsChecked = !inSteam, Tag = g, Margin = new System.Windows.Thickness(0, 4, 0, 4) };
+                    checks.Add(cb);
+                    listPanel.Children.Add(cb);
+                }
+            }
+
+            searchBar.TextChanged += (_, __) => Refresh();
+            Refresh();
+
+            btnSelectAll.Click += (_, __) => { foreach (var c in checks) c.IsChecked = true; };
+            btnSelectNone.Click += (_, __) => { foreach (var c in checks) c.IsChecked = false; };
+            btnCancel.Click += (_, __) => { window.DialogResult = false; window.Close(); };
+            btnExport.Click += (_, __) =>
+            {
+                try
+                {
+                    var selectedGames = checks.Where(c => c.IsChecked == true).Select(c => (Game)c.Tag).ToList();
+                    AddGamesToSteam(selectedGames);
+                    window.DialogResult = true; window.Close();
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error(ex, "Export selection failed");
+                    PlayniteApi.Dialogs.ShowErrorMessage($"Failed: {ex.Message}", Name);
+                }
+            };
+
+            window.ShowDialog();
         }
         catch (Exception ex)
         {
