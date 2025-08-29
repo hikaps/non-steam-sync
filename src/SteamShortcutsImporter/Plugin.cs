@@ -657,7 +657,8 @@ public class ShortcutsLibrary : LibraryPlugin
                 try
                 {
                     var selectedGames = checks.Where(c => c.IsChecked == true).Select(c => (Game)c.Tag).ToList();
-                    AddGamesToSteam(selectedGames);
+                    var res = AddGamesToSteamCore(selectedGames);
+                    PlayniteApi.Dialogs.ShowMessage($"Steam shortcuts updated. Created: {res.Added}, Updated: {res.Updated}, Skipped: {res.Skipped}", Name);
                     window.DialogResult = true; window.Close();
                 }
                 catch (Exception ex)
@@ -690,6 +691,20 @@ public class ShortcutsLibrary : LibraryPlugin
         {
             PlayniteApi.Dialogs.ShowErrorMessage("Set a valid Steam library path in settings.", Name);
             return;
+        }
+
+        var res = AddGamesToSteamCore(games);
+        PlayniteApi.Dialogs.ShowMessage($"Updated shortcuts.vdf. +{res.Added}/~{res.Updated}, skipped {res.Skipped}", Name);
+    }
+
+    private sealed class ExportResult { public int Added; public int Updated; public int Skipped; }
+
+    private ExportResult AddGamesToSteamCore(IEnumerable<Game> games)
+    {
+        var vdfPath = ResolveShortcutsVdfPath();
+        if (string.IsNullOrWhiteSpace(vdfPath))
+        {
+            return new ExportResult();
         }
 
         var shortcuts = File.Exists(vdfPath) ? ShortcutsFile.Read(vdfPath!).ToList() : new List<SteamShortcut>();
@@ -749,7 +764,7 @@ public class ShortcutsLibrary : LibraryPlugin
         }
 
         WriteShortcutsWithBackup(vdfPath!, shortcuts);
-        PlayniteApi.Dialogs.ShowMessage($"Updated shortcuts.vdf. +{added}/~{updated}, skipped {skipped}", Name);
+        return new ExportResult { Added = added, Updated = updated, Skipped = skipped };
     }
 
     private static string? TryGetGridDirFromVdf(string vdfPath)
