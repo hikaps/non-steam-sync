@@ -2,35 +2,35 @@ Playnite Extension: Steam Shortcuts Importer
 
 Overview
 - Imports non-Steam games from Steam's `shortcuts.vdf` into Playnite as a library.
-- Updates Playnite metadata and syncs changes back to `shortcuts.vdf`.
-- Lets you configure the path to the target `shortcuts.vdf` (per Steam profile).
+- Provides manual sync both ways: Steam → Playnite and Playnite → Steam.
+- Lets you configure the Steam root path; the plugin locates `userdata/<steamid>/config/shortcuts.vdf`.
 
 Status
-- Targets Playnite 11+ (net6). If you’re on Playnite 10, let me know and I’ll add a net48 build.
-- Includes a minimal binary VDF (KeyValues1) reader/writer tailored to `shortcuts.vdf`.
+- Targets Playnite 10 (net462). Includes a minimal binary VDF (KeyValues1) reader/writer tailored to `shortcuts.vdf`.
 
 Build
-- Open `src/SteamShortcutsImporter/SteamShortcutsImporter.csproj` in Visual Studio 2022+.
-- Restore NuGet packages (Playnite.SDK).
-- Build in Release; copy the resulting `.pext` or the folder with `manifest.yaml` + DLL into Playnite’s Extensions folder.
+- CLI:
+  - `dotnet restore src/SteamShortcutsImporter/SteamShortcutsImporter.csproj`
+  - `dotnet build src/SteamShortcutsImporter/SteamShortcutsImporter.csproj -c Release`
+- CI builds the `.pext` on Windows.
 
 Usage
 - In Playnite, enable the library plugin.
-- Set `shortcuts.vdf` path in extension settings.
-- Run a library import to create/update entries.
-- Edit game metadata in Playnite; plugin listens for updates and writes changes back to `shortcuts.vdf`.
+- In settings, set Steam’s root folder (e.g., `C:\\Program Files (x86)\\Steam`).
+- Menu actions under “Steam Shortcuts”:
+  - “Sync Steam → Playnite…” imports shortcuts as games.
+  - “Sync Playnite → Steam…” writes selected Playnite games to `shortcuts.vdf`.
 
 Notes
 - The parser covers common fields used by Steam shortcuts: `appname`, `exe`, `StartDir`, `icon`, `ShortcutPath`, `LaunchOptions`, `IsHidden`, `AllowDesktopConfig`, `AllowOverlay`, `OpenVR`, and `tags`.
-- App IDs for shortcuts are computed by Steam; this file does not store them. The plugin derives a stable ID used internally.
-- If multiple profiles exist, point the path to the correct profile’s `userdata/<steamid3>/config/shortcuts.vdf`.
+- Shortcut appids are derived via CRC32 and used to construct `steam://rungameid/<gameid64>` when launch-via-Steam is enabled.
+- The plugin finds `shortcuts.vdf` under `userdata/<steamid3>/config` beneath your Steam root.
 
 macOS build
-- Install .NET 6 SDK (`brew install dotnet-sdk` or from Microsoft).
-- You can compile the plugin on macOS using Windows targeting packs:
+- Install .NET SDK.
+- Build with Windows targeting packs:
   - `dotnet restore src/SteamShortcutsImporter/SteamShortcutsImporter.csproj`
   - `dotnet build src/SteamShortcutsImporter/SteamShortcutsImporter.csproj -c Release -p:EnableWindowsTargeting=true`
-- You can’t run Playnite on macOS, but this produces the DLL you can copy to a Windows machine.
 
 Local CLI harness (no Playnite dependency)
 - A small console app validates reading/writing `shortcuts.vdf`:
