@@ -248,6 +248,7 @@ public class ShortcutsLibrary : LibraryPlugin
             window.Content = grid;
 
             var checkBoxes = new List<System.Windows.Controls.CheckBox>();
+            var detector = new DuplicateDetector(this);
 
             void RefreshList()
             {
@@ -261,7 +262,7 @@ public class ShortcutsLibrary : LibraryPlugin
                         continue;
                     }
                     var summary = $"{sc.AppName} — {sc.Exe}";
-                    var existsAny = ExistsAnyGameMatch(sc);
+                    var existsAny = detector.ExistsAnyGameMatch(sc);
                     if (existsAny)
                     {
                         summary += " [Playnite]";
@@ -373,37 +374,92 @@ public class ShortcutsLibrary : LibraryPlugin
 
     private bool ExistsAnyGameMatch(SteamShortcut sc)
     {
-        try
+        var detector = new DuplicateDetector(this);
+        return detector.ExistsAnyGameMatch(sc);
+    }
+
+    private static string NormalizePath(string input)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return string.Empty;
+        var unq = input.Trim('"');
+        try { return Path.GetFullPath(unq); } catch { return unq; }
+    }
+
+    private sealed class DuplicateDetector
+    {
+        private readonly ShortcutsLibrary lib;
+        public DuplicateDetector(ShortcutsLibrary lib) { this.lib = lib; }
+
+        public bool ExistsAnyGameMatch(SteamShortcut sc)
         {
-            var byName = PlayniteApi.Database.Games.Where(x => string.Equals(x.Name, sc.AppName, StringComparison.OrdinalIgnoreCase));
-            var appId = sc.AppId != 0 ? sc.AppId : Utils.GenerateShortcutAppId(sc.Exe ?? string.Empty, sc.AppName ?? string.Empty);
-            var expectedUrl = appId != 0 ? $"steam://rungameid/{Utils.ToShortcutGameId(appId)}" : null;
-            foreach (var g in byName)
+            try
             {
-                var act = g.GameActions?.FirstOrDefault(a => a.IsPlayAction) ?? g.GameActions?.FirstOrDefault();
-                if (act == null)
+                // 1) Library-level ID match (stable or appid-string)
+                if (FindLibraryGameByIds(sc) != null)
                 {
-                    continue;
+                    return true;
                 }
-                if (act.Type == GameActionType.File)
+
+                // 2) Name + File path match across all games
+                var scExeNorm = NormalizePath(sc.Exe);
+                if (!string.IsNullOrEmpty(scExeNorm))
                 {
-                    var exe = (act.Path ?? string.Empty).Trim('"');
-                    if (string.Equals(exe, (sc.Exe ?? string.Empty).Trim('"'), StringComparison.OrdinalIgnoreCase))
+                    foreach (var g in lib.PlayniteApi.Database.Games.Where(x => string.Equals(x.Name, sc.AppName, StringComparison.OrdinalIgnoreCase)))
                     {
-                        return true;
+                        var act = g.GameActions?.FirstOrDefault(a => a.IsPlayAction) ?? g.GameActions?.FirstOrDefault();
+                        if (act?.Type == GameActionType.File && !string.IsNullOrEmpty(act.Path))
+                        {
+                            var exe = lib.ExpandPathVariables(g, act.Path) ?? string.Empty;
+                            var exeNorm = NormalizePath(exe);
+                            if (string.Equals(exeNorm, scExeNorm, StringComparison.OrdinalIgnoreCase))
+                            {
+                                return true;
+                            }
+                        }
                     }
                 }
-                else if (act.Type == GameActionType.URL && !string.IsNullOrEmpty(expectedUrl))
+
+                // 3) Name + Steam URL rungameid match across all games
+                var appId = sc.AppId != 0 ? sc.AppId : Utils.GenerateShortcutAppId(sc.Exe ?? string.Empty, sc.AppName ?? string.Empty);
+                if (appId != 0)
                 {
-                    if (string.Equals(act.Path ?? string.Empty, expectedUrl, StringComparison.OrdinalIgnoreCase))
+                    var expectedUrl = $"steam://rungameid/{Utils.ToShortcutGameId(appId)}";
+                    foreach (var g in lib.PlayniteApi.Database.Games.Where(x => string.Equals(x.Name, sc.AppName, StringComparison.OrdinalIgnoreCase)))
                     {
-                        return true;
+                        var act = g.GameActions?.FirstOrDefault(a => a.IsPlayAction) ?? g.GameActions?.FirstOrDefault();
+                        if (act?.Type == GameActionType.URL && !string.IsNullOrEmpty(act.Path))
+                        {
+                            if (string.Equals(act.Path, expectedUrl, StringComparison.OrdinalIgnoreCase))
+                            {
+                                return true;
+                            }
+                        }
                     }
                 }
             }
+            catch { }
+            return false;
         }
-        catch { }
-        return false;
+
+        public Game FindLibraryGameByIds(SteamShortcut sc)
+        {
+            try
+            {
+                if (!string.IsNullOrEmpty(sc.StableId))
+                {
+                    var g = lib.PlayniteApi.Database.Games.FirstOrDefault(x => x.PluginId == lib.Id && string.Equals(x.GameId, sc.StableId, StringComparison.OrdinalIgnoreCase));
+                    if (g != null) return g;
+                }
+                if (sc.AppId != 0)
+                {
+                    var idStr = sc.AppId.ToString();
+                    var g = lib.PlayniteApi.Database.Games.FirstOrDefault(x => x.PluginId == lib.Id && string.Equals(x.GameId, idStr, StringComparison.OrdinalIgnoreCase));
+                    if (g != null) return g;
+                }
+            }
+            catch { }
+            return null;
+        }
     }
 
     private void ShowAddToSteamDialog()
