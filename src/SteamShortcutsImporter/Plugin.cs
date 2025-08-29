@@ -192,7 +192,70 @@ public class ShortcutsLibrary : LibraryPlugin
 
     public override IEnumerable<GameMenuItem> GetGameMenuItems(GetGameMenuItemsArgs args)
     {
-        yield break;
+        if (args.Games?.Any() == true)
+        {
+            yield return new GameMenuItem
+            {
+                Description = "Steam Shortcuts: Add/Update in Steam",
+                Action = _ =>
+                {
+                    try { AddGamesToSteam(args.Games); }
+                    catch (Exception ex) { Logger.Error(ex, "Context Add/Update in Steam failed"); }
+                }
+            };
+
+            yield return new GameMenuItem
+            {
+                Description = "Steam Shortcuts: Copy Steam Launch URL",
+                Action = _ =>
+                {
+                    try
+                    {
+                        var g = args.Games.First();
+                        var act = g.GameActions?.FirstOrDefault(a => a.IsPlayAction) ?? g.GameActions?.FirstOrDefault();
+                        string exe = string.Empty;
+                        if (act?.Type == GameActionType.File && !string.IsNullOrEmpty(act.Path))
+                        {
+                            exe = ExpandPathVariables(g, act.Path) ?? string.Empty;
+                        }
+                        var appId = Utils.GenerateShortcutAppId(exe, g.Name);
+                        var url = $"steam://rungameid/{Utils.ToShortcutGameId(appId)}";
+                        System.Windows.Clipboard.SetText(url);
+                        PlayniteApi.Dialogs.ShowMessage("Copied launch URL to clipboard.", Name);
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Error(ex, "Copy rungameid failed");
+                    }
+                }
+            };
+
+            yield return new GameMenuItem
+            {
+                Description = "Steam Shortcuts: Open Steam Grid Folder",
+                Action = _ =>
+                {
+                    try
+                    {
+                        var vdf = ResolveShortcutsVdfPath();
+                        var grid = string.IsNullOrEmpty(vdf) ? null : TryGetGridDirFromVdf(vdf);
+                        if (!string.IsNullOrEmpty(grid) && Directory.Exists(grid))
+                        {
+                            var psi = new System.Diagnostics.ProcessStartInfo { FileName = grid, UseShellExecute = true };
+                            System.Diagnostics.Process.Start(psi);
+                        }
+                        else
+                        {
+                            PlayniteApi.Dialogs.ShowErrorMessage("Grid folder not found. Check Steam path in settings.", Name);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Error(ex, "Open grid folder failed");
+                    }
+                }
+            };
+        }
     }
 
     private void ShowImportDialog()
@@ -224,10 +287,14 @@ public class ShortcutsLibrary : LibraryPlugin
             var searchBar = new System.Windows.Controls.TextBox { Width = 320, Margin = new System.Windows.Thickness(0, 0, 16, 0) };
             var btnSelectAll = new System.Windows.Controls.Button { Content = "Select All", Margin = new System.Windows.Thickness(0, 0, 8, 0), MinWidth = 100 };
             var btnSelectNone = new System.Windows.Controls.Button { Content = "Deselect All", MinWidth = 100 };
+            var btnInvert = new System.Windows.Controls.Button { Content = "Invert", Margin = new System.Windows.Thickness(8, 0, 0, 0), MinWidth = 80 };
+            var cbOnlyNew = new System.Windows.Controls.CheckBox { Content = "Only new", Margin = new System.Windows.Thickness(12, 0, 0, 0), VerticalAlignment = System.Windows.VerticalAlignment.Center };
             topBar.Children.Add(lblFilter);
             topBar.Children.Add(searchBar);
             topBar.Children.Add(btnSelectAll);
             topBar.Children.Add(btnSelectNone);
+            topBar.Children.Add(btnInvert);
+            topBar.Children.Add(cbOnlyNew);
             var statusText = new System.Windows.Controls.TextBlock { Margin = new System.Windows.Thickness(16, 0, 0, 0), VerticalAlignment = System.Windows.VerticalAlignment.Center, Opacity = 0.8 };
             topBar.Children.Add(statusText);
 
@@ -250,6 +317,7 @@ public class ShortcutsLibrary : LibraryPlugin
             window.Content = grid;
 
             var checkBoxes = new List<System.Windows.Controls.CheckBox>();
+            var gridDir = TryGetGridDirFromVdf(vdfPath!);
             var detector = new DuplicateDetector(this);
 
             void RefreshList()
@@ -257,7 +325,7 @@ public class ShortcutsLibrary : LibraryPlugin
                 var filter = searchBar.Text?.Trim() ?? string.Empty;
                 listPanel.Children.Clear();
                 checkBoxes.Clear();
-                foreach (var sc in shortcuts)
+                foreach (var sc in shortcuts.OrderBy(s => s.AppName, StringComparer.OrdinalIgnoreCase))
                 {
                     if (!string.IsNullOrEmpty(filter) && sc.AppName?.IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0)
                     {
@@ -265,6 +333,10 @@ public class ShortcutsLibrary : LibraryPlugin
                     }
                     var summary = $"{sc.AppName} — {sc.Exe}";
                     var existsAny = detector.ExistsAnyGameMatch(sc);
+                    if (cbOnlyNew.IsChecked == true && (existsAny || (!string.IsNullOrEmpty(sc.StableId) && PlayniteApi.Database.Games.Any(g => g.PluginId == Id && string.Equals(g.GameId, sc.StableId, StringComparison.OrdinalIgnoreCase)))))
+                    {
+                        continue;
+                    }
                     if (existsAny)
                     {
                         summary += " [Playnite]";
@@ -272,7 +344,7 @@ public class ShortcutsLibrary : LibraryPlugin
                     var isAlready = !string.IsNullOrEmpty(sc.StableId) && PlayniteApi.Database.Games.Any(g => g.PluginId == Id && string.Equals(g.GameId, sc.StableId, StringComparison.OrdinalIgnoreCase));
                     var cb = new System.Windows.Controls.CheckBox
                     {
-                        Content = summary,
+                        Content = BuildListItemWithPreview(summary, TryPickGridPreview(sc.AppId, gridDir)),
                         IsChecked = !isAlready && !existsAny,
                         Tag = sc,
                         Margin = new System.Windows.Thickness(0, 4, 0, 4)
@@ -286,10 +358,13 @@ public class ShortcutsLibrary : LibraryPlugin
             }
 
             searchBar.TextChanged += (_, __) => RefreshList();
+            cbOnlyNew.Checked += (_, __) => RefreshList();
+            cbOnlyNew.Unchecked += (_, __) => RefreshList();
             RefreshList();
 
             btnSelectAll.Click += (_, __) => { foreach (var cb in checkBoxes) cb.IsChecked = true; UpdateStatus(); };
             btnSelectNone.Click += (_, __) => { foreach (var cb in checkBoxes) cb.IsChecked = false; UpdateStatus(); };
+            btnInvert.Click += (_, __) => { foreach (var cb in checkBoxes) cb.IsChecked = !(cb.IsChecked == true); UpdateStatus(); };
             btnCancel.Click += (_, __) => { window.DialogResult = false; window.Close(); };
             btnImport.Click += (_, __) =>
             {
@@ -505,10 +580,14 @@ public class ShortcutsLibrary : LibraryPlugin
             var searchBar = new System.Windows.Controls.TextBox { Width = 320, Margin = new System.Windows.Thickness(0, 0, 16, 0) };
             var btnSelectAll = new System.Windows.Controls.Button { Content = "Select All", Margin = new System.Windows.Thickness(0, 0, 8, 0), MinWidth = 100 };
             var btnSelectNone = new System.Windows.Controls.Button { Content = "Deselect All", MinWidth = 100 };
+            var btnInvert = new System.Windows.Controls.Button { Content = "Invert", Margin = new System.Windows.Thickness(8, 0, 0, 0), MinWidth = 80 };
+            var cbOnlyNew = new System.Windows.Controls.CheckBox { Content = "Only new", Margin = new System.Windows.Thickness(12, 0, 0, 0), VerticalAlignment = System.Windows.VerticalAlignment.Center };
             topBar.Children.Add(lblFilter);
             topBar.Children.Add(searchBar);
             topBar.Children.Add(btnSelectAll);
             topBar.Children.Add(btnSelectNone);
+            topBar.Children.Add(btnInvert);
+            topBar.Children.Add(cbOnlyNew);
             var statusText = new System.Windows.Controls.TextBlock { Margin = new System.Windows.Thickness(16, 0, 0, 0), VerticalAlignment = System.Windows.VerticalAlignment.Center, Opacity = 0.8 };
             topBar.Children.Add(statusText);
 
@@ -538,7 +617,7 @@ public class ShortcutsLibrary : LibraryPlugin
                 listPanel.Children.Clear();
                 checks.Clear();
 
-                foreach (var g in allGames)
+                foreach (var g in allGames.OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase))
                 {
                     var act = g.GameActions?.FirstOrDefault(a => a.IsPlayAction) ?? g.GameActions?.FirstOrDefault();
                     if (act == null || act.Type != GameActionType.File || string.IsNullOrEmpty(act.Path))
@@ -553,8 +632,9 @@ public class ShortcutsLibrary : LibraryPlugin
                     }
                     var appId = Utils.GenerateShortcutAppId(exePath, name);
                     var inSteam = existingShortcuts.ContainsKey(appId);
+                    if (cbOnlyNew.IsChecked == true && inSteam) { continue; }
                     var summary = $"{name} — {exePath}" + (inSteam ? " [Steam]" : string.Empty);
-                    var cb = new System.Windows.Controls.CheckBox { Content = summary, IsChecked = !inSteam, Tag = g, Margin = new System.Windows.Thickness(0, 4, 0, 4) };
+                    var cb = new System.Windows.Controls.CheckBox { Content = BuildListItemWithPreview(summary, TryPickPlaynitePreview(g)), IsChecked = !inSteam, Tag = g, Margin = new System.Windows.Thickness(0, 4, 0, 4) };
                     cb.Checked += (_, __) => UpdateStatus();
                     cb.Unchecked += (_, __) => UpdateStatus();
                     checks.Add(cb);
@@ -564,10 +644,13 @@ public class ShortcutsLibrary : LibraryPlugin
             }
 
             searchBar.TextChanged += (_, __) => Refresh();
+            cbOnlyNew.Checked += (_, __) => Refresh();
+            cbOnlyNew.Unchecked += (_, __) => Refresh();
             Refresh();
 
             btnSelectAll.Click += (_, __) => { foreach (var c in checks) c.IsChecked = true; UpdateStatus(); };
             btnSelectNone.Click += (_, __) => { foreach (var c in checks) c.IsChecked = false; UpdateStatus(); };
+            btnInvert.Click += (_, __) => { foreach (var c in checks) c.IsChecked = !(c.IsChecked == true); UpdateStatus(); };
             btnCancel.Click += (_, __) => { window.DialogResult = false; window.Close(); };
             btnExport.Click += (_, __) =>
             {
@@ -665,7 +748,7 @@ public class ShortcutsLibrary : LibraryPlugin
             }
         }
 
-        ShortcutsFile.Write(vdfPath!, shortcuts);
+        WriteShortcutsWithBackup(vdfPath!, shortcuts);
         PlayniteApi.Dialogs.ShowMessage($"Updated shortcuts.vdf. +{added}/~{updated}, skipped {skipped}", Name);
     }
 
@@ -746,6 +829,64 @@ public class ShortcutsLibrary : LibraryPlugin
         {
             Logger.Warn(ex, $"Failed exporting artwork to grid for appId={appId}");
         }
+    }
+
+    private object BuildListItemWithPreview(string text, string? imagePath)
+    {
+        var panel = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal };
+        if (!string.IsNullOrEmpty(imagePath) && File.Exists(imagePath))
+        {
+            try
+            {
+                var img = new System.Windows.Controls.Image
+                {
+                    Width = 48,
+                    Height = 48,
+                    Margin = new System.Windows.Thickness(0, 0, 8, 0),
+                    Source = new System.Windows.Media.Imaging.BitmapImage(new Uri(imagePath))
+                };
+                panel.Children.Add(img);
+            }
+            catch { }
+        }
+        panel.Children.Add(new System.Windows.Controls.TextBlock { Text = text, VerticalAlignment = System.Windows.VerticalAlignment.Center });
+        return panel;
+    }
+
+    private string? TryPickGridPreview(uint appId, string? gridDir)
+    {
+        try
+        {
+            if (appId == 0 || string.IsNullOrEmpty(gridDir) || !Directory.Exists(gridDir)) return null;
+            string[] hero = Directory.GetFiles(gridDir, appId + "_hero.*");
+            string[] poster = Directory.GetFiles(gridDir, appId + "p.*");
+            string[] cover = Directory.GetFiles(gridDir, appId + ".*");
+            string[] icon = Directory.GetFiles(gridDir, appId + "_icon.*");
+            return hero.FirstOrDefault() ?? poster.FirstOrDefault() ?? cover.FirstOrDefault() ?? icon.FirstOrDefault();
+        }
+        catch { return null; }
+    }
+
+    private string? TryPickPlaynitePreview(Game game)
+    {
+        try
+        {
+            string? path = null;
+            if (!string.IsNullOrEmpty(game.CoverImage))
+            {
+                path = PlayniteApi.Database.GetFullFilePath(game.CoverImage);
+            }
+            if (string.IsNullOrEmpty(path) && !string.IsNullOrEmpty(game.Icon))
+            {
+                path = PlayniteApi.Database.GetFullFilePath(game.Icon);
+            }
+            if (string.IsNullOrEmpty(path) && !string.IsNullOrEmpty(game.BackgroundImage))
+            {
+                path = PlayniteApi.Database.GetFullFilePath(game.BackgroundImage);
+            }
+            return File.Exists(path ?? string.Empty) ? path : null;
+        }
+        catch { return null; }
     }
 
     private void TryImportArtworkFromGrid(Game game, uint appId, string gridDir)
@@ -1029,12 +1170,33 @@ public class ShortcutsLibrary : LibraryPlugin
 
             if (changed)
             {
-                ShortcutsFile.Write(vdfPath!, shortcuts);
+                WriteShortcutsWithBackup(vdfPath!, shortcuts);
             }
         }
         catch (Exception ex)
         {
             Logger.Error(ex, "Failed to sync back to shortcuts.vdf");
         }
+    }
+
+    private void WriteShortcutsWithBackup(string vdfPath, List<SteamShortcut> shortcuts)
+    {
+        try
+        {
+            if (File.Exists(vdfPath))
+            {
+                var dir = Path.GetDirectoryName(vdfPath) ?? string.Empty;
+                var name = Path.GetFileNameWithoutExtension(vdfPath);
+                var ts = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+                var bak = Path.Combine(dir, $"{name}.{ts}.bak.vdf");
+                File.Copy(vdfPath, bak, overwrite: true);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn(ex, "Creating shortcuts.vdf backup failed");
+        }
+
+        ShortcutsFile.Write(vdfPath, shortcuts);
     }
 }
