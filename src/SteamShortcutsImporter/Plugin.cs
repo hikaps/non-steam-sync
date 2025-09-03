@@ -951,6 +951,15 @@ public class ShortcutsLibrary : LibraryPlugin
             foreach (var sc in shortcuts)
             {
                 var existing = FindExistingGameForShortcut(sc);
+                if (existing == null)
+                {
+                    // Avoid duplicating games that already exist in other libraries
+                    var detector = new DuplicateDetector(this);
+                    if (detector.ExistsAnyGameMatch(sc))
+                    {
+                        continue;
+                    }
+                }
                 var chosenId = existing?.GameId ?? (!string.IsNullOrEmpty(sc.StableId) ? sc.StableId : sc.AppId.ToString());
                 if (string.IsNullOrEmpty(chosenId))
                 {
