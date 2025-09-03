@@ -41,8 +41,7 @@ jobs:
         run: |
           $tag = "$env:GITHUB_REF_NAME"
           if ([string]::IsNullOrEmpty($tag)) { $tag = "dev" }
-          $sha = $env:GITHUB_SHA.Substring(0,7)
-          Rename-Item -Path "SteamShortcutsImporter.pext" -NewName "SteamShortcutsImporter-$tag-$sha.pext"
+          Rename-Item -Path "SteamShortcutsImporter.pext" -NewName "SteamShortcutsImporter-$tag.pext"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
