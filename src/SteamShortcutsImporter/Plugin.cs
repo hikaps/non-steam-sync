@@ -294,19 +294,19 @@ public class ShortcutsLibrary : LibraryPlugin
             grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = System.Windows.GridLength.Auto });
 
             var topBar = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, Margin = new System.Windows.Thickness(12, 12, 12, 6) };
-            var lblFilter = new System.Windows.Controls.TextBlock { Text = "Filter:", Margin = new System.Windows.Thickness(0, 0, 8, 0), VerticalAlignment = System.Windows.VerticalAlignment.Center, Foreground = System.Windows.SystemColors.ControlTextBrush };
-            var searchBar = new System.Windows.Controls.TextBox { Width = 320, Margin = new System.Windows.Thickness(0, 0, 16, 0) };
-            var btnSelectAll = new System.Windows.Controls.Button { Content = "Select All", Margin = new System.Windows.Thickness(0, 0, 8, 0), MinWidth = 100 };
-            var btnSelectNone = new System.Windows.Controls.Button { Content = "Deselect All", MinWidth = 100 };
-            var btnInvert = new System.Windows.Controls.Button { Content = "Invert", Margin = new System.Windows.Thickness(8, 0, 0, 0), MinWidth = 80 };
-            var cbOnlyNew = new System.Windows.Controls.CheckBox { Content = "Only new", Margin = new System.Windows.Thickness(12, 0, 0, 0), VerticalAlignment = System.Windows.VerticalAlignment.Center };
+            var lblFilter = new System.Windows.Controls.TextBlock { Text = "Filter:", Margin = new System.Windows.Thickness(0, 0, 8, 0), VerticalAlignment = System.Windows.VerticalAlignment.Center, Foreground = Brushes.White };
+            var searchBar = new System.Windows.Controls.TextBox { Width = 320, Margin = new System.Windows.Thickness(0, 0, 16, 0), Foreground = Brushes.White };
+            var btnSelectAll = new System.Windows.Controls.Button { Content = "Select All", Margin = new System.Windows.Thickness(0, 0, 8, 0), MinWidth = 100, Foreground = Brushes.White };
+            var btnSelectNone = new System.Windows.Controls.Button { Content = "Deselect All", MinWidth = 100, Foreground = Brushes.White };
+            var btnInvert = new System.Windows.Controls.Button { Content = "Invert", Margin = new System.Windows.Thickness(8, 0, 0, 0), MinWidth = 80, Foreground = Brushes.White };
+            var cbOnlyNew = new System.Windows.Controls.CheckBox { Content = "Only new", Margin = new System.Windows.Thickness(12, 0, 0, 0), VerticalAlignment = System.Windows.VerticalAlignment.Center, Foreground = Brushes.White };
             topBar.Children.Add(lblFilter);
             topBar.Children.Add(searchBar);
             topBar.Children.Add(btnSelectAll);
             topBar.Children.Add(btnSelectNone);
             topBar.Children.Add(btnInvert);
             topBar.Children.Add(cbOnlyNew);
-            var statusText = new System.Windows.Controls.TextBlock { Margin = new System.Windows.Thickness(16, 0, 0, 0), VerticalAlignment = System.Windows.VerticalAlignment.Center, Opacity = 1.0, Foreground = System.Windows.SystemColors.ControlTextBrush };
+            var statusText = new System.Windows.Controls.TextBlock { Margin = new System.Windows.Thickness(16, 0, 0, 0), VerticalAlignment = System.Windows.VerticalAlignment.Center, Opacity = 1.0, Foreground = Brushes.White };
             topBar.Children.Add(statusText);
 
             var contentGrid = new System.Windows.Controls.Grid();
@@ -326,8 +326,8 @@ public class ShortcutsLibrary : LibraryPlugin
             grid.Children.Add(contentGrid);
 
             var bottomBar = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, Margin = new System.Windows.Thickness(12, 6, 12, 12), HorizontalAlignment = System.Windows.HorizontalAlignment.Right };
-            var btnImport = new System.Windows.Controls.Button { Content = "Import", Margin = new System.Windows.Thickness(0, 0, 8, 0), MinWidth = 100 };
-            var btnCancel = new System.Windows.Controls.Button { Content = "Cancel", MinWidth = 100 };
+            var btnImport = new System.Windows.Controls.Button { Content = "Import", Margin = new System.Windows.Thickness(0, 0, 8, 0), MinWidth = 100, Foreground = Brushes.White };
+            var btnCancel = new System.Windows.Controls.Button { Content = "Cancel", MinWidth = 100, Foreground = Brushes.White };
             bottomBar.Children.Add(btnImport);
             bottomBar.Children.Add(btnCancel);
             System.Windows.Controls.Grid.SetRow(bottomBar, 1);
@@ -627,8 +627,8 @@ public class ShortcutsLibrary : LibraryPlugin
             grid.Children.Add(contentGrid);
 
             var bottom = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, Margin = new System.Windows.Thickness(12, 6, 12, 12), HorizontalAlignment = System.Windows.HorizontalAlignment.Right };
-            var btnExport = new System.Windows.Controls.Button { Content = "Create/Update Selected", Margin = new System.Windows.Thickness(0, 0, 8, 0), MinWidth = 150 };
-            var btnCancel = new System.Windows.Controls.Button { Content = "Cancel", MinWidth = 100 };
+            var btnExport = new System.Windows.Controls.Button { Content = "Create/Update Selected", Margin = new System.Windows.Thickness(0, 0, 8, 0), MinWidth = 150, Foreground = Brushes.White };
+            var btnCancel = new System.Windows.Controls.Button { Content = "Cancel", MinWidth = 100, Foreground = Brushes.White };
             bottom.Children.Add(btnExport);
             bottom.Children.Add(btnCancel);
             System.Windows.Controls.Grid.SetRow(bottom, 1);
@@ -951,7 +951,7 @@ public class ShortcutsLibrary : LibraryPlugin
             }
             catch { }
         }
-        panel.Children.Add(new System.Windows.Controls.TextBlock { Text = text, VerticalAlignment = System.Windows.VerticalAlignment.Center, Foreground = System.Windows.SystemColors.ControlTextBrush });
+        panel.Children.Add(new System.Windows.Controls.TextBlock { Text = text, VerticalAlignment = System.Windows.VerticalAlignment.Center, Foreground = Brushes.White });
         return panel;
     }
 
