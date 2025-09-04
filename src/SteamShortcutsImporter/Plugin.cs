@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Microsoft.Win32;
+using System.Windows.Media;
 
 namespace SteamShortcutsImporter;
 
