@@ -196,7 +196,8 @@ public class ShortcutsLibrary : LibraryPlugin
         {
             yield return new GameMenuItem
             {
-                Description = "Steam Shortcuts: Add/Update in Steam",
+                Description = "Add/Update in Steam",
+                MenuSection = "Steam Shortcuts",
                 Action = _ =>
                 {
                     try { AddGamesToSteam(args.Games); }
@@ -206,7 +207,8 @@ public class ShortcutsLibrary : LibraryPlugin
 
             yield return new GameMenuItem
             {
-                Description = "Steam Shortcuts: Copy Steam Launch URL",
+                Description = "Copy Steam Launch URL",
+                MenuSection = "Steam Shortcuts",
                 Action = _ =>
                 {
                     try
@@ -232,7 +234,8 @@ public class ShortcutsLibrary : LibraryPlugin
 
             yield return new GameMenuItem
             {
-                Description = "Steam Shortcuts: Open Steam Grid Folder",
+                Description = "Open Steam Grid Folder",
+                MenuSection = "Steam Shortcuts",
                 Action = _ =>
                 {
                     try
