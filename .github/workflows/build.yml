@@ -12,6 +12,10 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Compute short SHA
+        id: vars
+        shell: bash
+        run: echo "short_sha=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
@@ -33,12 +37,12 @@ jobs:
       - name: Rename with commit id
         shell: pwsh
         run: |
-          $sha = $env:GITHUB_SHA.Substring(0,7)
+          $sha = "${{ steps.vars.outputs.short_sha }}"
           Rename-Item -Path "SteamShortcutsImporter.pext" -NewName "SteamShortcutsImporter-$sha.pext"
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SteamShortcutsImporter-${{ github.sha }}.pext
+          name: SteamShortcutsImporter-${{ steps.vars.outputs.short_sha }}.pext
           path: SteamShortcutsImporter-*.pext
 
   tests-ubuntu:
