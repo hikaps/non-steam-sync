@@ -304,7 +304,12 @@ public class ShortcutsLibrary : LibraryPlugin
             var listHost = new System.Windows.Controls.StackPanel();
             listHost.Children.Add(topBar);
             var listPanel = new System.Windows.Controls.StackPanel { Margin = new System.Windows.Thickness(12, 0, 12, 0) };
-            var scroll = new System.Windows.Controls.ScrollViewer { Content = listPanel, VerticalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto };
+            var scroll = new System.Windows.Controls.ScrollViewer
+            {
+                Content = listPanel,
+                VerticalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto
+            };
             listHost.Children.Add(scroll);
             System.Windows.Controls.Grid.SetRow(listHost, 0);
             grid.Children.Add(listHost);
@@ -597,7 +602,12 @@ public class ShortcutsLibrary : LibraryPlugin
             var listHost = new System.Windows.Controls.StackPanel();
             listHost.Children.Add(topBar);
             var listPanel = new System.Windows.Controls.StackPanel { Margin = new System.Windows.Thickness(12, 0, 12, 0) };
-            var scroll = new System.Windows.Controls.ScrollViewer { Content = listPanel, VerticalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto };
+            var scroll = new System.Windows.Controls.ScrollViewer
+            {
+                Content = listPanel,
+                VerticalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto
+            };
             listHost.Children.Add(scroll);
             System.Windows.Controls.Grid.SetRow(listHost, 0);
             grid.Children.Add(listHost);
