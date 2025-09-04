@@ -1,5 +1,9 @@
 Playnite Extension: Steam Shortcuts Importer
 
+## Why This Exists
+
+I love Playnite as a clean, flexible launcher, but Steam offers the best controller experience: powerful per‑game profiles, community layouts, Steam Input, and the overlay. This extension bridges the two so you can start games from Playnite while actually launching them through Steam—getting Playnite’s organization and visuals with Steam’s controller magic. It’s the best of both worlds with minimal fuss.
+
 What It Does
 - Import your non‑Steam games from Steam’s “shortcuts” into Playnite.
 - Sync both ways when you want:
