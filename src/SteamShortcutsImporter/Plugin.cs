@@ -623,11 +623,14 @@ public class ShortcutsLibrary : LibraryPlugin
                 foreach (var g in allGames.OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase))
                 {
                     var act = g.GameActions?.FirstOrDefault(a => a.IsPlayAction) ?? g.GameActions?.FirstOrDefault();
-                    if (act == null || act.Type != GameActionType.File || string.IsNullOrEmpty(act.Path))
+                    if (act == null || string.IsNullOrEmpty(act.Path))
                     {
                         continue;
                     }
-                    var exePath = ExpandPathVariables(g, act.Path) ?? string.Empty;
+                    // Support both File and URL actions (URL via explorer.exe launcher)
+                    var exePath = act.Type == GameActionType.File
+                        ? (ExpandPathVariables(g, act.Path) ?? string.Empty)
+                        : "explorer.exe";
                     var name = string.IsNullOrEmpty(g.Name) ? (Path.GetFileNameWithoutExtension(exePath) ?? string.Empty) : g.Name;
                     if (!string.IsNullOrEmpty(filter) && name.IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0)
                     {
@@ -636,7 +639,7 @@ public class ShortcutsLibrary : LibraryPlugin
                     var appId = Utils.GenerateShortcutAppId(exePath, name);
                     var inSteam = existingShortcuts.ContainsKey(appId);
                     if (cbOnlyNew.IsChecked == true && inSteam) { continue; }
-                    var summary = $"{name} — {exePath}" + (inSteam ? " [Steam]" : string.Empty);
+                    var summary = $"{name} — " + (act.Type == GameActionType.File ? exePath : act.Path) + (inSteam ? " [Steam]" : string.Empty);
                     var cb = new System.Windows.Controls.CheckBox { Content = BuildListItemWithPreview(summary, TryPickPlaynitePreview(g)), IsChecked = !inSteam, Tag = g, Margin = new System.Windows.Thickness(0, 4, 0, 4) };
                     cb.Checked += (_, __) => UpdateStatus();
                     cb.Unchecked += (_, __) => UpdateStatus();
@@ -717,19 +720,38 @@ public class ShortcutsLibrary : LibraryPlugin
         foreach (var g in games)
         {
             var action = g.GameActions?.FirstOrDefault(a => a.IsPlayAction) ?? g.GameActions?.FirstOrDefault();
-            if (action == null || action.Type != GameActionType.File || string.IsNullOrEmpty(action.Path))
+            if (action == null || string.IsNullOrEmpty(action.Path))
             {
                 skipped++;
                 continue;
             }
 
-            var exePath = ExpandPathVariables(g, action.Path) ?? string.Empty;
-            var workDir = ExpandPathVariables(g, action.WorkingDir);
-            if (string.IsNullOrWhiteSpace(workDir) && !string.IsNullOrWhiteSpace(exePath))
+            string exePath;
+            string? workDir;
+            string name;
+
+            if (action.Type == GameActionType.File)
             {
-                try { workDir = Path.GetDirectoryName(exePath); } catch { workDir = null; }
+                exePath = ExpandPathVariables(g, action.Path) ?? string.Empty;
+                workDir = ExpandPathVariables(g, action.WorkingDir);
+                if (string.IsNullOrWhiteSpace(workDir) && !string.IsNullOrWhiteSpace(exePath))
+                {
+                    try { workDir = Path.GetDirectoryName(exePath); } catch { workDir = null; }
+                }
+                name = string.IsNullOrEmpty(g.Name) ? (Path.GetFileNameWithoutExtension(exePath) ?? string.Empty) : g.Name;
             }
-            var name = string.IsNullOrEmpty(g.Name) ? (Path.GetFileNameWithoutExtension(exePath) ?? string.Empty) : g.Name;
+            else if (action.Type == GameActionType.URL)
+            {
+                // Use explorer.exe to launch protocol URLs via Steam shortcut
+                exePath = "explorer.exe";
+                workDir = null;
+                name = string.IsNullOrEmpty(g.Name) ? action.Path : g.Name;
+            }
+            else
+            {
+                skipped++;
+                continue;
+            }
 
             var appId = Utils.GenerateShortcutAppId(exePath, name);
             if (!existing.TryGetValue(appId, out var sc))
@@ -763,6 +785,16 @@ public class ShortcutsLibrary : LibraryPlugin
             catch (Exception aex)
             {
                 Logger.Warn(aex, "Exporting artwork to grid failed.");
+            }
+
+            // Update launch options per action type
+            if (action.Type == GameActionType.URL)
+            {
+                sc.LaunchOptions = action.Path;
+            }
+            else if (action.Type == GameActionType.File)
+            {
+                sc.LaunchOptions = ExpandPathVariables(g, action.Arguments);
             }
         }
 
