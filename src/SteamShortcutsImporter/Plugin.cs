@@ -15,6 +15,7 @@ public class PluginSettings : ISettings
 
     public string SteamRootPath { get; set; } = string.Empty;
     public bool LaunchViaSteam { get; set; } = true;
+    public bool ExportCategoriesToSteam { get; set; } = true;
 
     public void BeginEdit() { }
     public void CancelEdit() { }
@@ -48,11 +49,13 @@ public class PluginSettings : ISettings
             {
                 SteamRootPath = saved.SteamRootPath;
                 LaunchViaSteam = saved.LaunchViaSteam;
+                ExportCategoriesToSteam = saved.ExportCategoriesToSteam;
             }
             else
             {
                 SteamRootPath = GuessSteamRootPath() ?? string.Empty;
                 LaunchViaSteam = true;
+                ExportCategoriesToSteam = true;
             }
         }
         catch (Exception ex)
@@ -60,6 +63,7 @@ public class PluginSettings : ISettings
             LogManager.GetLogger().Error(ex, "Failed to load saved settings, falling back to defaults.");
             SteamRootPath = GuessSteamRootPath() ?? string.Empty;
             LaunchViaSteam = true;
+            ExportCategoriesToSteam = true;
         }
     }
 
@@ -124,6 +128,10 @@ public class PluginSettingsView : System.Windows.Controls.UserControl
         launchCheck.SetBinding(System.Windows.Controls.Primitives.ToggleButton.IsCheckedProperty,
             new System.Windows.Data.Binding("LaunchViaSteam") { Mode = System.Windows.Data.BindingMode.TwoWay });
         panel.Children.Add(launchCheck);
+        var catCheck = new System.Windows.Controls.CheckBox { Content = "Export Playnite categories as Steam categories", Margin = new System.Windows.Thickness(0,4,0,0) };
+        catCheck.SetBinding(System.Windows.Controls.Primitives.ToggleButton.IsCheckedProperty,
+            new System.Windows.Data.Binding("ExportCategoriesToSteam") { Mode = System.Windows.Data.BindingMode.TwoWay });
+        panel.Children.Add(catCheck);
         Content = panel;
     }
 }
@@ -774,14 +782,25 @@ public class ShortcutsLibrary : LibraryPlugin
                 sc.AppName = name; sc.Exe = exePath; sc.StartDir = workDir ?? sc.StartDir; updated++;
             }
 
+            // Build Steam categories from Playnite Tags (+ Categories if enabled)
+            var catNames = new List<string>();
             if (g.TagIds?.Any() == true)
             {
-                sc.Tags = g.TagIds
+                catNames.AddRange(g.TagIds
                     .Select(id => PlayniteApi.Database.Tags.Get(id)?.Name)
                     .Where(n => !string.IsNullOrWhiteSpace(n))
-                    .Select(n => n!)
-                    .Distinct()
-                    .ToList();
+                    .Select(n => n!));
+            }
+            if (settings.ExportCategoriesToSteam && g.CategoryIds?.Any() == true)
+            {
+                catNames.AddRange(g.CategoryIds
+                    .Select(id => PlayniteApi.Database.Categories.Get(id)?.Name)
+                    .Where(n => !string.IsNullOrWhiteSpace(n))
+                    .Select(n => n!));
+            }
+            if (catNames.Count > 0)
+            {
+                sc.Tags = catNames.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
             }
 
             try
@@ -1212,14 +1231,25 @@ public class ShortcutsLibrary : LibraryPlugin
                     sc.StartDir = dir ?? sc.StartDir;
                 }
 
+                // Build Steam categories from Playnite Tags (+ Categories if enabled)
+                var catNames = new List<string>();
                 if (game.TagIds?.Any() == true)
                 {
-                    sc.Tags = game.TagIds
+                    catNames.AddRange(game.TagIds
                         .Select(id => PlayniteApi.Database.Tags.Get(id)?.Name)
                         .Where(n => !string.IsNullOrWhiteSpace(n))
-                        .Select(n => n!)
-                        .Distinct()
-                        .ToList();
+                        .Select(n => n!));
+                }
+                if (settings.ExportCategoriesToSteam && game.CategoryIds?.Any() == true)
+                {
+                    catNames.AddRange(game.CategoryIds
+                        .Select(id => PlayniteApi.Database.Categories.Get(id)?.Name)
+                        .Where(n => !string.IsNullOrWhiteSpace(n))
+                        .Select(n => n!));
+                }
+                if (catNames.Count > 0)
+                {
+                    sc.Tags = catNames.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
                 }
 
                 if (sc.AppId == 0)
