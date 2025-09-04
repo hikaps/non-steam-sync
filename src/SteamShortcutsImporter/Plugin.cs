@@ -17,6 +17,7 @@ public class PluginSettings : ISettings
     public string SteamRootPath { get; set; } = string.Empty;
     public bool LaunchViaSteam { get; set; } = true;
     public bool ExportCategoriesToSteam { get; set; } = true;
+    public bool MirrorToSteamCollections { get; set; } = true;
 
     public void BeginEdit() { }
     public void CancelEdit() { }
@@ -51,12 +52,14 @@ public class PluginSettings : ISettings
                 SteamRootPath = saved.SteamRootPath;
                 LaunchViaSteam = saved.LaunchViaSteam;
                 ExportCategoriesToSteam = saved.ExportCategoriesToSteam;
+                MirrorToSteamCollections = saved.MirrorToSteamCollections;
             }
             else
             {
                 SteamRootPath = GuessSteamRootPath() ?? string.Empty;
                 LaunchViaSteam = true;
                 ExportCategoriesToSteam = true;
+                MirrorToSteamCollections = true;
             }
         }
         catch (Exception ex)
@@ -65,6 +68,7 @@ public class PluginSettings : ISettings
             SteamRootPath = GuessSteamRootPath() ?? string.Empty;
             LaunchViaSteam = true;
             ExportCategoriesToSteam = true;
+            MirrorToSteamCollections = true;
         }
     }
 
@@ -133,6 +137,10 @@ public class PluginSettingsView : System.Windows.Controls.UserControl
         catCheck.SetBinding(System.Windows.Controls.Primitives.ToggleButton.IsCheckedProperty,
             new System.Windows.Data.Binding("ExportCategoriesToSteam") { Mode = System.Windows.Data.BindingMode.TwoWay });
         panel.Children.Add(catCheck);
+        var collCheck = new System.Windows.Controls.CheckBox { Content = "Mirror categories to Steam Collections (sharedconfig.vdf)", Margin = new System.Windows.Thickness(0,2,0,0) };
+        collCheck.SetBinding(System.Windows.Controls.Primitives.ToggleButton.IsCheckedProperty,
+            new System.Windows.Data.Binding("MirrorToSteamCollections") { Mode = System.Windows.Data.BindingMode.TwoWay });
+        panel.Children.Add(collCheck);
         Content = panel;
     }
 }
@@ -829,6 +837,12 @@ public class ShortcutsLibrary : LibraryPlugin
                 Logger.Warn(aex, "Exporting artwork to grid failed.");
             }
 
+            // Mirror to Steam Collections (sharedconfig.vdf)
+            if (settings.MirrorToSteamCollections && sc.Tags?.Any() == true)
+            {
+                TryMirrorCollections(sc.AppId, sc.Tags);
+            }
+
             // Update launch options per action type
             if (action.Type == GameActionType.URL)
             {
@@ -932,6 +946,114 @@ public class ShortcutsLibrary : LibraryPlugin
         {
             Logger.Warn(ex, $"Failed exporting artwork to grid for appId={appId}");
         }
+    }
+
+    private string? ResolveSharedConfigPath()
+    {
+        try
+        {
+            var root = settings.SteamRootPath ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
+            {
+                return null;
+            }
+            var userdata = Path.Combine(root, "userdata");
+            if (!Directory.Exists(userdata))
+            {
+                return null;
+            }
+            foreach (var userDir in Directory.EnumerateDirectories(userdata))
+            {
+                var cfg = Path.Combine(userDir, "7", "remote", "sharedconfig.vdf");
+                if (File.Exists(cfg))
+                {
+                    return cfg;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex, "Failed to resolve sharedconfig.vdf path.");
+        }
+        return null;
+    }
+
+    private void TryMirrorCollections(uint appId, IEnumerable<string> categories)
+    {
+        try
+        {
+            if (appId == 0) return;
+            var shared = ResolveSharedConfigPath();
+            if (string.IsNullOrEmpty(shared) || !File.Exists(shared)) return;
+
+            var root = TextKv.Read(shared!);
+            var appsNode = FindAppsNode(root);
+            if (appsNode == null) return;
+
+            var gameKey = Utils.ToShortcutGameId(appId).ToString();
+            if (!appsNode.TryGetValue(gameKey, out var gv) || gv is not Dictionary<string, object> gameNode)
+            {
+                gameNode = new Dictionary<string, object>(StringComparer.Ordinal);
+                appsNode[gameKey] = gameNode;
+            }
+            var tags = new Dictionary<string, object>(StringComparer.Ordinal);
+            int idx = 0;
+            foreach (var c in categories.Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                tags[idx.ToString()] = c;
+                idx++;
+            }
+            gameNode["tags"] = tags;
+
+            WriteSharedConfigWithBackup(shared!, root);
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn(ex, "Mirroring categories to Steam Collections failed");
+        }
+    }
+
+    private static Dictionary<string, object>? FindAppsNode(Dictionary<string, object> root)
+    {
+        var stack = new Stack<Dictionary<string, object>>();
+        stack.Push(root);
+        while (stack.Count > 0)
+        {
+            var node = stack.Pop();
+            foreach (var kv in node)
+            {
+                if (kv.Value is Dictionary<string, object> child)
+                {
+                    if (child.TryGetValue("apps", out var apps) && apps is Dictionary<string, object> appsDict)
+                    {
+                        return appsDict;
+                    }
+                    stack.Push(child);
+                }
+            }
+        }
+        return null;
+    }
+
+    private void WriteSharedConfigWithBackup(string path, Dictionary<string, object> root)
+    {
+        try
+        {
+            if (File.Exists(path))
+            {
+                var dir = Path.GetDirectoryName(path) ?? string.Empty;
+                var name = Path.GetFileNameWithoutExtension(path);
+                var ts = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+                var bak = Path.Combine(dir, $"{name}.{ts}.bak.vdf");
+                File.Copy(path, bak, overwrite: true);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn(ex, "Creating sharedconfig.vdf backup failed");
+        }
+
+        TextKv.Write(path, root);
     }
 
     private object BuildListItemWithPreview(string text, string? imagePath)
@@ -1291,6 +1413,12 @@ public class ShortcutsLibrary : LibraryPlugin
                 if (!string.IsNullOrEmpty(iconPath))
                 {
                     sc.Icon = iconPath!;
+                }
+
+                // Mirror to Steam Collections
+                if (settings.MirrorToSteamCollections && sc.Tags?.Any() == true)
+                {
+                    TryMirrorCollections(sc.AppId, sc.Tags);
                 }
 
                 changed = true;
