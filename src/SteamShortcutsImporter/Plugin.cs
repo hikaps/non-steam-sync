@@ -294,7 +294,7 @@ public class ShortcutsLibrary : LibraryPlugin
             grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = System.Windows.GridLength.Auto });
 
             var topBar = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, Margin = new System.Windows.Thickness(12, 12, 12, 6) };
-            var lblFilter = new System.Windows.Controls.TextBlock { Text = "Filter:", Margin = new System.Windows.Thickness(0, 0, 8, 0), VerticalAlignment = System.Windows.VerticalAlignment.Center };
+            var lblFilter = new System.Windows.Controls.TextBlock { Text = "Filter:", Margin = new System.Windows.Thickness(0, 0, 8, 0), VerticalAlignment = System.Windows.VerticalAlignment.Center, Foreground = System.Windows.SystemColors.ControlTextBrush };
             var searchBar = new System.Windows.Controls.TextBox { Width = 320, Margin = new System.Windows.Thickness(0, 0, 16, 0) };
             var btnSelectAll = new System.Windows.Controls.Button { Content = "Select All", Margin = new System.Windows.Thickness(0, 0, 8, 0), MinWidth = 100 };
             var btnSelectNone = new System.Windows.Controls.Button { Content = "Deselect All", MinWidth = 100 };
@@ -306,11 +306,13 @@ public class ShortcutsLibrary : LibraryPlugin
             topBar.Children.Add(btnSelectNone);
             topBar.Children.Add(btnInvert);
             topBar.Children.Add(cbOnlyNew);
-            var statusText = new System.Windows.Controls.TextBlock { Margin = new System.Windows.Thickness(16, 0, 0, 0), VerticalAlignment = System.Windows.VerticalAlignment.Center, Opacity = 0.8 };
+            var statusText = new System.Windows.Controls.TextBlock { Margin = new System.Windows.Thickness(16, 0, 0, 0), VerticalAlignment = System.Windows.VerticalAlignment.Center, Opacity = 1.0, Foreground = System.Windows.SystemColors.ControlTextBrush };
             topBar.Children.Add(statusText);
 
-            var listHost = new System.Windows.Controls.StackPanel();
-            listHost.Children.Add(topBar);
+            var contentGrid = new System.Windows.Controls.Grid();
+            contentGrid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = System.Windows.GridLength.Auto });
+            contentGrid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = new System.Windows.GridLength(1, System.Windows.GridUnitType.Star) });
+            contentGrid.Children.Add(topBar);
             var listPanel = new System.Windows.Controls.StackPanel { Margin = new System.Windows.Thickness(12, 0, 12, 0) };
             var scroll = new System.Windows.Controls.ScrollViewer
             {
@@ -318,9 +320,10 @@ public class ShortcutsLibrary : LibraryPlugin
                 VerticalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto,
                 HorizontalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto
             };
-            listHost.Children.Add(scroll);
-            System.Windows.Controls.Grid.SetRow(listHost, 0);
-            grid.Children.Add(listHost);
+            System.Windows.Controls.Grid.SetRow(scroll, 1);
+            contentGrid.Children.Add(scroll);
+            System.Windows.Controls.Grid.SetRow(contentGrid, 0);
+            grid.Children.Add(contentGrid);
 
             var bottomBar = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, Margin = new System.Windows.Thickness(12, 6, 12, 12), HorizontalAlignment = System.Windows.HorizontalAlignment.Right };
             var btnImport = new System.Windows.Controls.Button { Content = "Import", Margin = new System.Windows.Thickness(0, 0, 8, 0), MinWidth = 100 };
@@ -592,7 +595,7 @@ public class ShortcutsLibrary : LibraryPlugin
             grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = System.Windows.GridLength.Auto });
 
             var topBar = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, Margin = new System.Windows.Thickness(12, 12, 12, 6) };
-            var lblFilter = new System.Windows.Controls.TextBlock { Text = "Filter:", Margin = new System.Windows.Thickness(0, 0, 8, 0), VerticalAlignment = System.Windows.VerticalAlignment.Center };
+            var lblFilter = new System.Windows.Controls.TextBlock { Text = "Filter:", Margin = new System.Windows.Thickness(0, 0, 8, 0), VerticalAlignment = System.Windows.VerticalAlignment.Center, Foreground = System.Windows.SystemColors.ControlTextBrush };
             var searchBar = new System.Windows.Controls.TextBox { Width = 320, Margin = new System.Windows.Thickness(0, 0, 16, 0) };
             var btnSelectAll = new System.Windows.Controls.Button { Content = "Select All", Margin = new System.Windows.Thickness(0, 0, 8, 0), MinWidth = 100 };
             var btnSelectNone = new System.Windows.Controls.Button { Content = "Deselect All", MinWidth = 100 };
@@ -604,11 +607,13 @@ public class ShortcutsLibrary : LibraryPlugin
             topBar.Children.Add(btnSelectNone);
             topBar.Children.Add(btnInvert);
             topBar.Children.Add(cbOnlyNew);
-            var statusText = new System.Windows.Controls.TextBlock { Margin = new System.Windows.Thickness(16, 0, 0, 0), VerticalAlignment = System.Windows.VerticalAlignment.Center, Opacity = 0.8 };
+            var statusText = new System.Windows.Controls.TextBlock { Margin = new System.Windows.Thickness(16, 0, 0, 0), VerticalAlignment = System.Windows.VerticalAlignment.Center, Opacity = 1.0, Foreground = System.Windows.SystemColors.ControlTextBrush };
             topBar.Children.Add(statusText);
 
-            var listHost = new System.Windows.Controls.StackPanel();
-            listHost.Children.Add(topBar);
+            var contentGrid = new System.Windows.Controls.Grid();
+            contentGrid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = System.Windows.GridLength.Auto });
+            contentGrid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = new System.Windows.GridLength(1, System.Windows.GridUnitType.Star) });
+            contentGrid.Children.Add(topBar);
             var listPanel = new System.Windows.Controls.StackPanel { Margin = new System.Windows.Thickness(12, 0, 12, 0) };
             var scroll = new System.Windows.Controls.ScrollViewer
             {
@@ -616,9 +621,10 @@ public class ShortcutsLibrary : LibraryPlugin
                 VerticalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto,
                 HorizontalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto
             };
-            listHost.Children.Add(scroll);
-            System.Windows.Controls.Grid.SetRow(listHost, 0);
-            grid.Children.Add(listHost);
+            System.Windows.Controls.Grid.SetRow(scroll, 1);
+            contentGrid.Children.Add(scroll);
+            System.Windows.Controls.Grid.SetRow(contentGrid, 0);
+            grid.Children.Add(contentGrid);
 
             var bottom = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, Margin = new System.Windows.Thickness(12, 6, 12, 12), HorizontalAlignment = System.Windows.HorizontalAlignment.Right };
             var btnExport = new System.Windows.Controls.Button { Content = "Create/Update Selected", Margin = new System.Windows.Thickness(0, 0, 8, 0), MinWidth = 150 };
@@ -658,7 +664,7 @@ public class ShortcutsLibrary : LibraryPlugin
                     var inSteam = existingShortcuts.ContainsKey(appId);
                     if (cbOnlyNew.IsChecked == true && inSteam) { continue; }
                     var summary = $"{name} — " + (act.Type == GameActionType.File ? exePath : act.Path) + (inSteam ? " [Steam]" : string.Empty);
-                    var cb = new System.Windows.Controls.CheckBox { Content = BuildListItemWithPreview(summary, TryPickPlaynitePreview(g)), IsChecked = !inSteam, Tag = g, Margin = new System.Windows.Thickness(0, 4, 0, 4) };
+                    var cb = new System.Windows.Controls.CheckBox { Content = BuildListItemWithPreview(summary, TryPickPlaynitePreview(g)), IsChecked = !inSteam, Tag = g, Margin = new System.Windows.Thickness(0, 4, 0, 4), Foreground = System.Windows.SystemColors.ControlTextBrush };
                     cb.Checked += (_, __) => UpdateStatus();
                     cb.Unchecked += (_, __) => UpdateStatus();
                     checks.Add(cb);
@@ -809,6 +815,12 @@ public class ShortcutsLibrary : LibraryPlugin
                 if (!string.IsNullOrEmpty(gridDir))
                 {
                     TryExportArtworkToGrid(g, appId, gridDir);
+                    // Ensure Steam icon field points to exported icon if available
+                    var iconPath = TryGetGridIconPath(appId, gridDir);
+                    if (!string.IsNullOrEmpty(iconPath))
+                    {
+                        sc.Icon = iconPath!;
+                    }
                 }
             }
             catch (Exception aex)
@@ -844,6 +856,17 @@ public class ShortcutsLibrary : LibraryPlugin
         {
             return null;
         }
+    }
+
+    private static string? TryGetGridIconPath(uint appId, string? gridDir)
+    {
+        try
+        {
+            if (appId == 0 || string.IsNullOrEmpty(gridDir) || !Directory.Exists(gridDir)) return null;
+            var matches = Directory.GetFiles(gridDir, appId + "_icon.*");
+            return matches.FirstOrDefault();
+        }
+        catch { return null; }
     }
 
     private string? ExpandPathVariables(Game game, string? input)
@@ -928,7 +951,7 @@ public class ShortcutsLibrary : LibraryPlugin
             }
             catch { }
         }
-        panel.Children.Add(new System.Windows.Controls.TextBlock { Text = text, VerticalAlignment = System.Windows.VerticalAlignment.Center });
+        panel.Children.Add(new System.Windows.Controls.TextBlock { Text = text, VerticalAlignment = System.Windows.VerticalAlignment.Center, Foreground = System.Windows.SystemColors.ControlTextBrush });
         return panel;
     }
 
@@ -1260,9 +1283,14 @@ public class ShortcutsLibrary : LibraryPlugin
                 // Normalize play action to Steam URL when enabled
                 EnsureSteamPlayAction(game, sc);
 
-                // Export updated artwork to grid
+                // Export updated artwork to grid and update icon path
                 var gridDir = TryGetGridDirFromVdf(vdfPath!);
                 TryExportArtworkToGrid(game, sc.AppId, gridDir);
+                var iconPath = TryGetGridIconPath(sc.AppId, gridDir);
+                if (!string.IsNullOrEmpty(iconPath))
+                {
+                    sc.Icon = iconPath!;
+                }
 
                 changed = true;
             }
