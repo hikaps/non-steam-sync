@@ -409,7 +409,7 @@ public class ShortcutsLibrary : LibraryPlugin
             {
                 Content = listPanel,
                 VerticalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto,
-                HorizontalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto
+                HorizontalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Disabled
             };
             System.Windows.Controls.Grid.SetRow(scroll, 1);
             contentGrid.Children.Add(scroll);
@@ -441,7 +441,8 @@ public class ShortcutsLibrary : LibraryPlugin
                     {
                         continue;
                     }
-                    var summary = $"{sc.AppName} — {sc.Exe}";
+                    var displayTarget = LooksLikeUrl(sc.LaunchOptions) ? sc.LaunchOptions : (sc.Exe ?? string.Empty).Trim('"');
+                    var summary = $"{sc.AppName} — {displayTarget}";
                     var existsAny = detector.ExistsAnyGameMatch(sc);
                     if (cbOnlyNew.IsChecked == true && (existsAny || (!string.IsNullOrEmpty(sc.StableId) && PlayniteApi.Database.Games.Any(g => g.PluginId == Id && string.Equals(g.GameId, sc.StableId, StringComparison.OrdinalIgnoreCase)))))
                     {
@@ -729,7 +730,7 @@ public class ShortcutsLibrary : LibraryPlugin
             {
                 Content = listPanel,
                 VerticalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto,
-                HorizontalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto
+                HorizontalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Disabled
             };
             System.Windows.Controls.Grid.SetRow(scroll, 1);
             contentGrid.Children.Add(scroll);
@@ -1042,7 +1043,10 @@ public class ShortcutsLibrary : LibraryPlugin
 
     private object BuildListItemWithPreview(string text, string? imagePath)
     {
-        var panel = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal };
+        var grid = new System.Windows.Controls.Grid();
+        grid.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition { Width = System.Windows.GridLength.Auto });
+        grid.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition { Width = new System.Windows.GridLength(1, System.Windows.GridUnitType.Star) });
+
         if (!string.IsNullOrEmpty(imagePath) && File.Exists(imagePath))
         {
             try
@@ -1054,12 +1058,24 @@ public class ShortcutsLibrary : LibraryPlugin
                     Margin = new System.Windows.Thickness(0, 0, 8, 0),
                     Source = new System.Windows.Media.Imaging.BitmapImage(new Uri(imagePath))
                 };
-                panel.Children.Add(img);
+                System.Windows.Controls.Grid.SetColumn(img, 0);
+                grid.Children.Add(img);
             }
             catch { }
         }
-        panel.Children.Add(new System.Windows.Controls.TextBlock { Text = text, VerticalAlignment = System.Windows.VerticalAlignment.Center, Foreground = Brushes.White });
-        return panel;
+
+        var tb = new System.Windows.Controls.TextBlock
+        {
+            Text = text,
+            VerticalAlignment = System.Windows.VerticalAlignment.Center,
+            Foreground = Brushes.White,
+            TextTrimming = System.Windows.TextTrimming.CharacterEllipsis,
+            TextWrapping = System.Windows.TextWrapping.NoWrap
+        };
+        System.Windows.Controls.Grid.SetColumn(tb, 1);
+        grid.Children.Add(tb);
+
+        return grid;
     }
 
     private string? TryPickGridPreview(uint appId, string? gridDir)
@@ -1096,6 +1112,15 @@ public class ShortcutsLibrary : LibraryPlugin
             return File.Exists(path ?? string.Empty) ? path : null;
         }
         catch { return null; }
+    }
+
+    private static bool LooksLikeUrl(string? s)
+    {
+        if (string.IsNullOrWhiteSpace(s)) return false;
+        var val = s.Trim();
+        return val.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+            || val.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
+            || val.StartsWith("steam://", StringComparison.OrdinalIgnoreCase);
     }
 
     private void TryImportArtworkFromGrid(Game game, uint appId, string gridDir)
