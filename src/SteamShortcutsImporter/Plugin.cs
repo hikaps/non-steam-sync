@@ -17,7 +17,6 @@ public class PluginSettings : ISettings
     public string SteamRootPath { get; set; } = string.Empty;
     public bool LaunchViaSteam { get; set; } = true;
     public bool ExportCategoriesToSteam { get; set; } = true;
-    public bool MirrorToSteamCollections { get; set; } = true;
     public Dictionary<string, string> ExportMap { get; set; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
     public void BeginEdit() { }
@@ -53,7 +52,6 @@ public class PluginSettings : ISettings
                 SteamRootPath = saved.SteamRootPath;
                 LaunchViaSteam = saved.LaunchViaSteam;
                 ExportCategoriesToSteam = saved.ExportCategoriesToSteam;
-                MirrorToSteamCollections = saved.MirrorToSteamCollections;
                 ExportMap = saved.ExportMap ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             }
             else
@@ -61,7 +59,6 @@ public class PluginSettings : ISettings
                 SteamRootPath = GuessSteamRootPath() ?? string.Empty;
                 LaunchViaSteam = true;
                 ExportCategoriesToSteam = true;
-                MirrorToSteamCollections = true;
                 ExportMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             }
         }
@@ -71,7 +68,6 @@ public class PluginSettings : ISettings
             SteamRootPath = GuessSteamRootPath() ?? string.Empty;
             LaunchViaSteam = true;
             ExportCategoriesToSteam = true;
-            MirrorToSteamCollections = true;
             ExportMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         }
     }
@@ -141,10 +137,7 @@ public class PluginSettingsView : System.Windows.Controls.UserControl
         catCheck.SetBinding(System.Windows.Controls.Primitives.ToggleButton.IsCheckedProperty,
             new System.Windows.Data.Binding("ExportCategoriesToSteam") { Mode = System.Windows.Data.BindingMode.TwoWay });
         panel.Children.Add(catCheck);
-        var collCheck = new System.Windows.Controls.CheckBox { Content = "Mirror categories to Steam Collections (sharedconfig.vdf)", Margin = new System.Windows.Thickness(0,2,0,0) };
-        collCheck.SetBinding(System.Windows.Controls.Primitives.ToggleButton.IsCheckedProperty,
-            new System.Windows.Data.Binding("MirrorToSteamCollections") { Mode = System.Windows.Data.BindingMode.TwoWay });
-        panel.Children.Add(collCheck);
+        // Collections mirroring is experimental and lives on a separate branch.
         var backupBtn = new System.Windows.Controls.Button { Content = "Open Backup Folder", Margin = new System.Windows.Thickness(0,8,0,0), MinWidth = 160 };
         backupBtn.Click += (_, __) =>
         {
@@ -821,10 +814,6 @@ public class ShortcutsLibrary : LibraryPlugin
                     var selectedGames = checks.Where(c => c.IsChecked == true).Select(c => (Game)c.Tag).ToList();
                     var res = AddGamesToSteamCore(selectedGames);
                     var msg = $"Steam shortcuts updated. Created: {res.Added}, Updated: {res.Updated}, Skipped: {res.Skipped}.";
-                    if (settings.MirrorToSteamCollections)
-                    {
-                        msg += " If Steam is running, restart it to see Collections.";
-                    }
                     PlayniteApi.Dialogs.ShowMessage(msg, Name);
                     window.DialogResult = true; window.Close();
                 }
@@ -862,10 +851,6 @@ public class ShortcutsLibrary : LibraryPlugin
 
         var res = AddGamesToSteamCore(games);
         var msg = $"Updated shortcuts.vdf. +{res.Added}/~{res.Updated}, skipped {res.Skipped}.";
-        if (settings.MirrorToSteamCollections)
-        {
-            msg += " If Steam is running, restart it to see Collections.";
-        }
         PlayniteApi.Dialogs.ShowMessage(msg, Name);
     }
 
@@ -970,11 +955,6 @@ public class ShortcutsLibrary : LibraryPlugin
                 Logger.Warn(aex, "Exporting artwork to grid failed.");
             }
 
-            // Mirror to Steam Collections (sharedconfig.vdf)
-            if (settings.MirrorToSteamCollections && sc.Tags?.Any() == true)
-            {
-                TryMirrorCollections(sc.AppId, sc.Tags);
-            }
 
             // Update launch options per action type
             if (action.Type == GameActionType.URL)
@@ -1092,190 +1072,7 @@ public class ShortcutsLibrary : LibraryPlugin
         }
     }
 
-    private string? ResolveSharedConfigPath()
-    {
-        try
-        {
-            var root = settings.SteamRootPath ?? string.Empty;
-            if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
-            {
-                return null;
-            }
-            var userdata = Path.Combine(root, "userdata");
-            if (!Directory.Exists(userdata))
-            {
-                return null;
-            }
-            foreach (var userDir in Directory.EnumerateDirectories(userdata))
-            {
-                var cfg = Path.Combine(userDir, "7", "remote", "sharedconfig.vdf");
-                if (File.Exists(cfg))
-                {
-                    return cfg;
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            Logger.Error(ex, "Failed to resolve sharedconfig.vdf path.");
-        }
-        return null;
-    }
-
-    private IEnumerable<string> ResolveSharedConfigPaths()
-    {
-        try
-        {
-            var root = settings.SteamRootPath ?? string.Empty;
-            if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
-            {
-                return Enumerable.Empty<string>();
-            }
-            var userdata = Path.Combine(root, "userdata");
-            if (!Directory.Exists(userdata))
-            {
-                return Enumerable.Empty<string>();
-            }
-            var files = new List<string>();
-            foreach (var userDir in Directory.EnumerateDirectories(userdata))
-            {
-                var cfg1 = Path.Combine(userDir, "7", "remote", "sharedconfig.vdf");
-                var cfg2 = Path.Combine(userDir, "config", "sharedconfig.vdf");
-                if (File.Exists(cfg1)) { files.Add(cfg1); }
-                if (File.Exists(cfg2)) { files.Add(cfg2); }
-            }
-            return files;
-        }
-        catch (Exception ex)
-        {
-            Logger.Error(ex, "Failed to resolve sharedconfig.vdf paths.");
-            return Enumerable.Empty<string>();
-        }
-    }
-
-    private bool TryMirrorCollections(uint appId, IEnumerable<string> categories)
-    {
-        try
-        {
-            if (appId == 0) return false;
-            var paths = ResolveSharedConfigPaths();
-            bool wroteAny = false;
-            foreach (var shared in paths)
-            {
-                try
-                {
-                    Logger.Info($"Updating Collections in sharedconfig: '{shared}' for appId '{appId}'");
-                    var root = TextKv.Read(shared);
-                    var appsNode = FindAppsNode(root) ?? EnsureAppsNode(root);
-                    if (appsNode == null) { continue; }
-
-            // In sharedconfig.vdf, app keys under "apps" use the 32-bit appid string,
-            // not the 64-bit rungameid. For non-Steam shortcuts this is the CRC|0x80000000 value.
-            var gameKey = appId.ToString();
-                    if (!appsNode.TryGetValue(gameKey, out var gv) || gv is not Dictionary<string, object> gameNode)
-                    {
-                        gameNode = new Dictionary<string, object>(StringComparer.Ordinal);
-                        appsNode[gameKey] = gameNode;
-                    }
-                    var tags = new Dictionary<string, object>(StringComparer.Ordinal);
-                    int idx = 0;
-                    foreach (var c in categories.Distinct(StringComparer.OrdinalIgnoreCase))
-                    {
-                        tags[idx.ToString()] = c;
-                        idx++;
-                    }
-                    gameNode["tags"] = tags;
-
-                    WriteSharedConfigWithBackup(shared, root);
-                    wroteAny = true;
-                }
-                catch (Exception inner)
-                {
-                    Logger.Warn(inner, $"Failed updating collections in '{shared}'");
-                }
-            }
-            return wroteAny;
-        }
-        catch (Exception ex)
-        {
-            Logger.Warn(ex, "Mirroring categories to Steam Collections failed");
-            return false;
-        }
-    }
-
-    private static Dictionary<string, object>? FindAppsNode(Dictionary<string, object> root)
-    {
-        var stack = new Stack<Dictionary<string, object>>();
-        stack.Push(root);
-        while (stack.Count > 0)
-        {
-            var node = stack.Pop();
-            foreach (var kv in node)
-            {
-                if (kv.Value is Dictionary<string, object> child)
-                {
-                    if (child.TryGetValue("apps", out var apps) && apps is Dictionary<string, object> appsDict)
-                    {
-                        return appsDict;
-                    }
-                    stack.Push(child);
-                }
-            }
-        }
-        return null;
-    }
-
-    private static Dictionary<string, object>? EnsureAppsNode(Dictionary<string, object> root)
-    {
-        // Create the nested structure used by Steam if missing:
-        // "UserRoamingConfigStore" -> "Software" -> "Valve" -> "Steam" -> "apps"
-        const string a = "UserRoamingConfigStore";
-        const string b = "Software";
-        const string c = "Valve";
-        const string d = "Steam";
-        const string e = "apps";
-
-        if (!root.TryGetValue(a, out var av) || av is not Dictionary<string, object> an)
-        {
-            an = new Dictionary<string, object>(StringComparer.Ordinal);
-            root[a] = an;
-        }
-        if (!an.TryGetValue(b, out var bv) || bv is not Dictionary<string, object> bn)
-        {
-            bn = new Dictionary<string, object>(StringComparer.Ordinal);
-            an[b] = bn;
-        }
-        if (!bn.TryGetValue(c, out var cv) || cv is not Dictionary<string, object> cn)
-        {
-            cn = new Dictionary<string, object>(StringComparer.Ordinal);
-            bn[c] = cn;
-        }
-        if (!cn.TryGetValue(d, out var dv) || dv is not Dictionary<string, object> dn)
-        {
-            dn = new Dictionary<string, object>(StringComparer.Ordinal);
-            cn[d] = dn;
-        }
-        if (!dn.TryGetValue(e, out var ev) || ev is not Dictionary<string, object> en)
-        {
-            en = new Dictionary<string, object>(StringComparer.Ordinal);
-            dn[e] = en;
-        }
-        return en as Dictionary<string, object>;
-    }
-
-    private void WriteSharedConfigWithBackup(string path, Dictionary<string, object> root)
-    {
-        try
-        {
-            CreateManagedBackup(path, "sharedconfig");
-        }
-        catch (Exception ex)
-        {
-            Logger.Warn(ex, "Creating sharedconfig.vdf backup failed");
-        }
-
-        TextKv.Write(path, root);
-    }
+    // Collections mirroring code removed from main branch (experimental on feature/collections-experimental)
 
     private object BuildListItemWithPreview(string text, string? imagePath)
     {
@@ -1636,11 +1433,6 @@ public class ShortcutsLibrary : LibraryPlugin
                     sc.Icon = iconPath!;
                 }
 
-                // Mirror to Steam Collections
-                if (settings.MirrorToSteamCollections && sc.Tags?.Any() == true)
-                {
-                    TryMirrorCollections(sc.AppId, sc.Tags);
-                }
 
                 changed = true;
             }

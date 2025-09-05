@@ -47,6 +47,9 @@ Notes
 - Uses a small reader/writer for Steam’s binary KeyValues (shortcuts.vdf).
 - Shortcut appids are computed (CRC32) and used to build the `rungameid` launch URL.
 
+Branching Policy
+- Experimental features land on feature branches first.
+
 For Developers
 - Build (Windows):
   - `dotnet restore src/SteamShortcutsImporter/SteamShortcutsImporter.csproj`
