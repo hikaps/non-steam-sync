@@ -728,7 +728,12 @@ public class ShortcutsLibrary : LibraryPlugin
                 {
                     var selectedGames = checks.Where(c => c.IsChecked == true).Select(c => (Game)c.Tag).ToList();
                     var res = AddGamesToSteamCore(selectedGames);
-                    PlayniteApi.Dialogs.ShowMessage($"Steam shortcuts updated. Created: {res.Added}, Updated: {res.Updated}, Skipped: {res.Skipped}", Name);
+                    var msg = $"Steam shortcuts updated. Created: {res.Added}, Updated: {res.Updated}, Skipped: {res.Skipped}.";
+                    if (settings.MirrorToSteamCollections)
+                    {
+                        msg += " If Steam is running, restart it to see Collections.";
+                    }
+                    PlayniteApi.Dialogs.ShowMessage(msg, Name);
                     window.DialogResult = true; window.Close();
                 }
                 catch (Exception ex)
@@ -764,7 +769,12 @@ public class ShortcutsLibrary : LibraryPlugin
         }
 
         var res = AddGamesToSteamCore(games);
-        PlayniteApi.Dialogs.ShowMessage($"Updated shortcuts.vdf. +{res.Added}/~{res.Updated}, skipped {res.Skipped}", Name);
+        var msg = $"Updated shortcuts.vdf. +{res.Added}/~{res.Updated}, skipped {res.Skipped}.";
+        if (settings.MirrorToSteamCollections)
+        {
+            msg += " If Steam is running, restart it to see Collections.";
+        }
+        PlayniteApi.Dialogs.ShowMessage(msg, Name);
     }
 
     private sealed class ExportResult { public int Added; public int Updated; public int Skipped; }
@@ -1020,38 +1030,82 @@ public class ShortcutsLibrary : LibraryPlugin
         return null;
     }
 
-    private void TryMirrorCollections(uint appId, IEnumerable<string> categories)
+    private IEnumerable<string> ResolveSharedConfigPaths()
     {
         try
         {
-            if (appId == 0) return;
-            var shared = ResolveSharedConfigPath();
-            if (string.IsNullOrEmpty(shared) || !File.Exists(shared)) return;
-
-            var root = TextKv.Read(shared!);
-            var appsNode = FindAppsNode(root);
-            if (appsNode == null) return;
-
-            var gameKey = Utils.ToShortcutGameId(appId).ToString();
-            if (!appsNode.TryGetValue(gameKey, out var gv) || gv is not Dictionary<string, object> gameNode)
+            var root = settings.SteamRootPath ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
             {
-                gameNode = new Dictionary<string, object>(StringComparer.Ordinal);
-                appsNode[gameKey] = gameNode;
+                return Enumerable.Empty<string>();
             }
-            var tags = new Dictionary<string, object>(StringComparer.Ordinal);
-            int idx = 0;
-            foreach (var c in categories.Distinct(StringComparer.OrdinalIgnoreCase))
+            var userdata = Path.Combine(root, "userdata");
+            if (!Directory.Exists(userdata))
             {
-                tags[idx.ToString()] = c;
-                idx++;
+                return Enumerable.Empty<string>();
             }
-            gameNode["tags"] = tags;
+            var files = new List<string>();
+            foreach (var userDir in Directory.EnumerateDirectories(userdata))
+            {
+                var cfg = Path.Combine(userDir, "7", "remote", "sharedconfig.vdf");
+                if (File.Exists(cfg))
+                {
+                    files.Add(cfg);
+                }
+            }
+            return files;
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex, "Failed to resolve sharedconfig.vdf paths.");
+            return Enumerable.Empty<string>();
+        }
+    }
 
-            WriteSharedConfigWithBackup(shared!, root);
+    private bool TryMirrorCollections(uint appId, IEnumerable<string> categories)
+    {
+        try
+        {
+            if (appId == 0) return false;
+            var paths = ResolveSharedConfigPaths();
+            bool wroteAny = false;
+            foreach (var shared in paths)
+            {
+                try
+                {
+                    var root = TextKv.Read(shared);
+                    var appsNode = FindAppsNode(root) ?? EnsureAppsNode(root);
+                    if (appsNode == null) { continue; }
+
+                    var gameKey = Utils.ToShortcutGameId(appId).ToString();
+                    if (!appsNode.TryGetValue(gameKey, out var gv) || gv is not Dictionary<string, object> gameNode)
+                    {
+                        gameNode = new Dictionary<string, object>(StringComparer.Ordinal);
+                        appsNode[gameKey] = gameNode;
+                    }
+                    var tags = new Dictionary<string, object>(StringComparer.Ordinal);
+                    int idx = 0;
+                    foreach (var c in categories.Distinct(StringComparer.OrdinalIgnoreCase))
+                    {
+                        tags[idx.ToString()] = c;
+                        idx++;
+                    }
+                    gameNode["tags"] = tags;
+
+                    WriteSharedConfigWithBackup(shared, root);
+                    wroteAny = true;
+                }
+                catch (Exception inner)
+                {
+                    Logger.Warn(inner, $"Failed updating collections in '{shared}'");
+                }
+            }
+            return wroteAny;
         }
         catch (Exception ex)
         {
             Logger.Warn(ex, "Mirroring categories to Steam Collections failed");
+            return false;
         }
     }
 
@@ -1075,6 +1129,44 @@ public class ShortcutsLibrary : LibraryPlugin
             }
         }
         return null;
+    }
+
+    private static Dictionary<string, object>? EnsureAppsNode(Dictionary<string, object> root)
+    {
+        // Create the nested structure used by Steam if missing:
+        // "UserRoamingConfigStore" -> "Software" -> "Valve" -> "Steam" -> "apps"
+        const string a = "UserRoamingConfigStore";
+        const string b = "Software";
+        const string c = "Valve";
+        const string d = "Steam";
+        const string e = "apps";
+
+        if (!root.TryGetValue(a, out var av) || av is not Dictionary<string, object> an)
+        {
+            an = new Dictionary<string, object>(StringComparer.Ordinal);
+            root[a] = an;
+        }
+        if (!an.TryGetValue(b, out var bv) || bv is not Dictionary<string, object> bn)
+        {
+            bn = new Dictionary<string, object>(StringComparer.Ordinal);
+            an[b] = bn;
+        }
+        if (!bn.TryGetValue(c, out var cv) || cv is not Dictionary<string, object> cn)
+        {
+            cn = new Dictionary<string, object>(StringComparer.Ordinal);
+            bn[c] = cn;
+        }
+        if (!cn.TryGetValue(d, out var dv) || dv is not Dictionary<string, object> dn)
+        {
+            dn = new Dictionary<string, object>(StringComparer.Ordinal);
+            cn[d] = dn;
+        }
+        if (!dn.TryGetValue(e, out var ev) || ev is not Dictionary<string, object> en)
+        {
+            en = new Dictionary<string, object>(StringComparer.Ordinal);
+            dn[e] = en;
+        }
+        return en as Dictionary<string, object>;
     }
 
     private void WriteSharedConfigWithBackup(string path, Dictionary<string, object> root)
