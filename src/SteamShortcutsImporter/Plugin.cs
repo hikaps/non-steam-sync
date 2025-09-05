@@ -368,140 +368,42 @@ public class ShortcutsLibrary : LibraryPlugin
             PlayniteApi.Dialogs.ShowErrorMessage("Set a valid Steam library path in settings.", Name);
             return;
         }
-
         try
         {
             var shortcuts = ShortcutsFile.Read(vdfPath!).ToList();
-
-            var window = PlayniteApi.Dialogs.CreateWindow(new WindowCreationOptions { ShowCloseButton = true });
-            window.Title = "Steam Shortcuts — Select Items to Import";
-            window.Width = 900;
-            window.Height = 650;
-            window.MinWidth = 720;
-            window.MinHeight = 480;
-
-            var grid = new System.Windows.Controls.Grid();
-            grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = new System.Windows.GridLength(1, System.Windows.GridUnitType.Star) });
-            grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = System.Windows.GridLength.Auto });
-
-            var topBar = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, Margin = new System.Windows.Thickness(12, 12, 12, 6) };
-            var lblFilter = new System.Windows.Controls.TextBlock { Text = "Filter:", Margin = new System.Windows.Thickness(0, 0, 8, 0), VerticalAlignment = System.Windows.VerticalAlignment.Center, Foreground = Brushes.White };
-            var searchBar = new System.Windows.Controls.TextBox { Width = 320, Margin = new System.Windows.Thickness(0, 0, 16, 0), Foreground = Brushes.White };
-            var btnSelectAll = new System.Windows.Controls.Button { Content = "Select All", Margin = new System.Windows.Thickness(0, 0, 8, 0), MinWidth = 100, Foreground = Brushes.White };
-            var btnSelectNone = new System.Windows.Controls.Button { Content = "Deselect All", MinWidth = 100, Foreground = Brushes.White };
-            var btnInvert = new System.Windows.Controls.Button { Content = "Invert", Margin = new System.Windows.Thickness(8, 0, 0, 0), MinWidth = 80, Foreground = Brushes.White };
-            var cbOnlyNew = new System.Windows.Controls.CheckBox { Content = "Only new", Margin = new System.Windows.Thickness(12, 0, 0, 0), VerticalAlignment = System.Windows.VerticalAlignment.Center, Foreground = Brushes.White };
-            topBar.Children.Add(lblFilter);
-            topBar.Children.Add(searchBar);
-            topBar.Children.Add(btnSelectAll);
-            topBar.Children.Add(btnSelectNone);
-            topBar.Children.Add(btnInvert);
-            topBar.Children.Add(cbOnlyNew);
-            var statusText = new System.Windows.Controls.TextBlock { Margin = new System.Windows.Thickness(16, 0, 0, 0), VerticalAlignment = System.Windows.VerticalAlignment.Center, Opacity = 1.0, Foreground = Brushes.White };
-            topBar.Children.Add(statusText);
-
-            var contentGrid = new System.Windows.Controls.Grid();
-            contentGrid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = System.Windows.GridLength.Auto });
-            contentGrid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = new System.Windows.GridLength(1, System.Windows.GridUnitType.Star) });
-            contentGrid.Children.Add(topBar);
-            var listPanel = new System.Windows.Controls.StackPanel { Margin = new System.Windows.Thickness(12, 0, 12, 0) };
-            var scroll = new System.Windows.Controls.ScrollViewer
-            {
-                Content = listPanel,
-                VerticalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto,
-                HorizontalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Disabled
-            };
-            System.Windows.Controls.Grid.SetRow(scroll, 1);
-            contentGrid.Children.Add(scroll);
-            System.Windows.Controls.Grid.SetRow(contentGrid, 0);
-            grid.Children.Add(contentGrid);
-
-            var bottomBar = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, Margin = new System.Windows.Thickness(12, 6, 12, 12), HorizontalAlignment = System.Windows.HorizontalAlignment.Right };
-            var btnImport = new System.Windows.Controls.Button { Content = "Import", Margin = new System.Windows.Thickness(0, 0, 8, 0), MinWidth = 100, Foreground = Brushes.White };
-            var btnCancel = new System.Windows.Controls.Button { Content = "Cancel", MinWidth = 100, Foreground = Brushes.White };
-            bottomBar.Children.Add(btnImport);
-            bottomBar.Children.Add(btnCancel);
-            System.Windows.Controls.Grid.SetRow(bottomBar, 1);
-            grid.Children.Add(bottomBar);
-
-            window.Content = grid;
-
-            var checkBoxes = new List<System.Windows.Controls.CheckBox>();
-            var gridDir = TryGetGridDirFromVdf(vdfPath!);
             var detector = new DuplicateDetector(this);
+            var gridDir = TryGetGridDirFromVdf(vdfPath!);
 
-            void RefreshList()
-            {
-                var filter = searchBar.Text?.Trim() ?? string.Empty;
-                listPanel.Children.Clear();
-                checkBoxes.Clear();
-                foreach (var sc in shortcuts.OrderBy(s => s.AppName, StringComparer.OrdinalIgnoreCase))
+            ShowSelectionDialog(
+                title: "Steam Shortcuts — Select Items to Import",
+                items: shortcuts.OrderBy(s => s.AppName, StringComparer.OrdinalIgnoreCase).ToList(),
+                displayText: sc =>
                 {
-                    if (!string.IsNullOrEmpty(filter) && sc.AppName?.IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0)
-                    {
-                        continue;
-                    }
-                    var displayTarget = LooksLikeUrl(sc.LaunchOptions) ? sc.LaunchOptions : (sc.Exe ?? string.Empty).Trim('"');
-                    var summary = $"{sc.AppName} — {displayTarget}";
+                    var target = LooksLikeUrl(sc.LaunchOptions) ? sc.LaunchOptions : (sc.Exe ?? string.Empty).Trim('"');
                     var existsAny = detector.ExistsAnyGameMatch(sc);
-                    if (cbOnlyNew.IsChecked == true && (existsAny || (!string.IsNullOrEmpty(sc.StableId) && PlayniteApi.Database.Games.Any(g => g.PluginId == Id && string.Equals(g.GameId, sc.StableId, StringComparison.OrdinalIgnoreCase)))))
-                    {
-                        continue;
-                    }
-                    if (existsAny)
-                    {
-                        summary += " [Playnite]";
-                    }
-                    var isAlready = !string.IsNullOrEmpty(sc.StableId) && PlayniteApi.Database.Games.Any(g => g.PluginId == Id && string.Equals(g.GameId, sc.StableId, StringComparison.OrdinalIgnoreCase));
-                    var cb = new System.Windows.Controls.CheckBox
-                    {
-                        Content = BuildListItemWithPreview(summary, TryPickGridPreview(sc.AppId, gridDir)),
-                        IsChecked = !isAlready && !existsAny,
-                        Tag = sc,
-                        Margin = new System.Windows.Thickness(0, 4, 0, 4)
-                    };
-                    cb.Checked += (_, __) => UpdateStatus();
-                    cb.Unchecked += (_, __) => UpdateStatus();
-                    checkBoxes.Add(cb);
-                    listPanel.Children.Add(cb);
-                }
-                UpdateStatus();
-            }
-
-            searchBar.TextChanged += (_, __) => RefreshList();
-            cbOnlyNew.Checked += (_, __) => RefreshList();
-            cbOnlyNew.Unchecked += (_, __) => RefreshList();
-            RefreshList();
-
-            btnSelectAll.Click += (_, __) => { foreach (var cb in checkBoxes) cb.IsChecked = true; UpdateStatus(); };
-            btnSelectNone.Click += (_, __) => { foreach (var cb in checkBoxes) cb.IsChecked = false; UpdateStatus(); };
-            btnInvert.Click += (_, __) => { foreach (var cb in checkBoxes) cb.IsChecked = !(cb.IsChecked == true); UpdateStatus(); };
-            btnCancel.Click += (_, __) => { window.DialogResult = false; window.Close(); };
-            btnImport.Click += (_, __) =>
-            {
-                try
+                    var baseText = $"{sc.AppName} — {target}";
+                    return existsAny ? baseText + " [Playnite]" : baseText;
+                },
+                previewImage: sc => TryPickGridPreview(sc.AppId, gridDir),
+                isInitiallyChecked: sc =>
                 {
-                    var selected = checkBoxes.Where(c => c.IsChecked == true).Select(c => (SteamShortcut)c.Tag).ToList();
+                    var existsAny = detector.ExistsAnyGameMatch(sc);
+                    var isAlready = !string.IsNullOrEmpty(sc.StableId) && PlayniteApi.Database.Games.Any(g => g.PluginId == Id && string.Equals(g.GameId, sc.StableId, StringComparison.OrdinalIgnoreCase));
+                    return !isAlready && !existsAny;
+                },
+                isNew: sc =>
+                {
+                    var existsAny = detector.ExistsAnyGameMatch(sc);
+                    var isAlready = !string.IsNullOrEmpty(sc.StableId) && PlayniteApi.Database.Games.Any(g => g.PluginId == Id && string.Equals(g.GameId, sc.StableId, StringComparison.OrdinalIgnoreCase));
+                    return !isAlready && !existsAny;
+                },
+                confirmLabel: "Import",
+                onConfirm: selected =>
+                {
                     var imported = ImportShortcutsToPlaynite(selected, vdfPath!, out var skipped);
                     var msg = skipped > 0 ? $"Imported {imported} item(s). Skipped {skipped} existing item(s)." : $"Imported {imported} item(s) from Steam.";
                     PlayniteApi.Dialogs.ShowMessage(msg, Name);
-                    window.DialogResult = true; window.Close();
-                }
-                catch (Exception ex)
-                {
-                    Logger.Error(ex, "Failed to import selected shortcuts.");
-                    PlayniteApi.Dialogs.ShowErrorMessage($"Import failed: {ex.Message}", Name);
-                }
-            };
-
-            window.ShowDialog();
-
-            void UpdateStatus()
-            {
-                int selected = checkBoxes.Count(c => c.IsChecked == true);
-                int total = checkBoxes.Count;
-                statusText.Text = $"Selected: {selected} / {total}";
-            }
+                });
         }
         catch (Exception ex)
         {
@@ -694,135 +596,176 @@ public class ShortcutsLibrary : LibraryPlugin
             var shortcuts = File.Exists(vdfPath) ? ShortcutsFile.Read(vdfPath!).ToList() : new List<SteamShortcut>();
             var existingShortcuts = shortcuts.ToDictionary(s => s.AppId, s => s);
 
-            var window = PlayniteApi.Dialogs.CreateWindow(new WindowCreationOptions { ShowCloseButton = true });
-            window.Title = "Steam Shortcuts — Select Items to Export";
-            window.Width = 900;
-            window.Height = 650;
-            window.MinWidth = 720;
-            window.MinHeight = 480;
-
-            var grid = new System.Windows.Controls.Grid();
-            grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = new System.Windows.GridLength(1, System.Windows.GridUnitType.Star) });
-            grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = System.Windows.GridLength.Auto });
-
-            var topBar = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, Margin = new System.Windows.Thickness(12, 12, 12, 6) };
-            var lblFilter = new System.Windows.Controls.TextBlock { Text = "Filter:", Margin = new System.Windows.Thickness(0, 0, 8, 0), VerticalAlignment = System.Windows.VerticalAlignment.Center, Foreground = Brushes.White };
-            var searchBar = new System.Windows.Controls.TextBox { Width = 320, Margin = new System.Windows.Thickness(0, 0, 16, 0), Foreground = Brushes.White };
-            var btnSelectAll = new System.Windows.Controls.Button { Content = "Select All", Margin = new System.Windows.Thickness(0, 0, 8, 0), MinWidth = 100, Foreground = Brushes.White };
-            var btnSelectNone = new System.Windows.Controls.Button { Content = "Deselect All", MinWidth = 100, Foreground = Brushes.White };
-            var btnInvert = new System.Windows.Controls.Button { Content = "Invert", Margin = new System.Windows.Thickness(8, 0, 0, 0), MinWidth = 80, Foreground = Brushes.White };
-            var cbOnlyNew = new System.Windows.Controls.CheckBox { Content = "Only new", Margin = new System.Windows.Thickness(12, 0, 0, 0), VerticalAlignment = System.Windows.VerticalAlignment.Center, Foreground = Brushes.White };
-            topBar.Children.Add(lblFilter);
-            topBar.Children.Add(searchBar);
-            topBar.Children.Add(btnSelectAll);
-            topBar.Children.Add(btnSelectNone);
-            topBar.Children.Add(btnInvert);
-            topBar.Children.Add(cbOnlyNew);
-            var statusText = new System.Windows.Controls.TextBlock { Margin = new System.Windows.Thickness(16, 0, 0, 0), VerticalAlignment = System.Windows.VerticalAlignment.Center, Opacity = 1.0, Foreground = Brushes.White };
-            topBar.Children.Add(statusText);
-
-            var contentGrid = new System.Windows.Controls.Grid();
-            contentGrid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = System.Windows.GridLength.Auto });
-            contentGrid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = new System.Windows.GridLength(1, System.Windows.GridUnitType.Star) });
-            contentGrid.Children.Add(topBar);
-            var listPanel = new System.Windows.Controls.StackPanel { Margin = new System.Windows.Thickness(12, 0, 12, 0) };
-            var scroll = new System.Windows.Controls.ScrollViewer
-            {
-                Content = listPanel,
-                VerticalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto,
-                HorizontalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Disabled
-            };
-            System.Windows.Controls.Grid.SetRow(scroll, 1);
-            contentGrid.Children.Add(scroll);
-            System.Windows.Controls.Grid.SetRow(contentGrid, 0);
-            grid.Children.Add(contentGrid);
-
-            var bottom = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, Margin = new System.Windows.Thickness(12, 6, 12, 12), HorizontalAlignment = System.Windows.HorizontalAlignment.Right };
-            var btnExport = new System.Windows.Controls.Button { Content = "Create/Update Selected", Margin = new System.Windows.Thickness(0, 0, 8, 0), MinWidth = 150, Foreground = Brushes.White };
-            var btnCancel = new System.Windows.Controls.Button { Content = "Cancel", MinWidth = 100, Foreground = Brushes.White };
-            bottom.Children.Add(btnExport);
-            bottom.Children.Add(btnCancel);
-            System.Windows.Controls.Grid.SetRow(bottom, 1);
-            grid.Children.Add(bottom);
-
-            window.Content = grid;
-
-            var checks = new List<System.Windows.Controls.CheckBox>();
-
-            void Refresh()
-            {
-                var filter = searchBar.Text?.Trim() ?? string.Empty;
-                listPanel.Children.Clear();
-                checks.Clear();
-
-                foreach (var g in allGames.OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase))
+            ShowSelectionDialog(
+                title: "Steam Shortcuts — Select Items to Export",
+                items: allGames.OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase).ToList(),
+                displayText: g =>
                 {
                     var act = g.GameActions?.FirstOrDefault(a => a.IsPlayAction) ?? g.GameActions?.FirstOrDefault();
-                    if (act == null || string.IsNullOrEmpty(act.Path))
-                    {
-                        continue;
-                    }
-                    // Support both File and URL actions (URL via explorer.exe launcher)
-                    var exePath = act.Type == GameActionType.File
-                        ? (ExpandPathVariables(g, act.Path) ?? string.Empty)
-                        : "explorer.exe";
+                    if (act == null || string.IsNullOrEmpty(act.Path)) return g.Name ?? string.Empty;
+                    var exePath = act.Type == GameActionType.File ? (ExpandPathVariables(g, act.Path) ?? string.Empty) : "explorer.exe";
                     var name = string.IsNullOrEmpty(g.Name) ? (Path.GetFileNameWithoutExtension(exePath) ?? string.Empty) : g.Name;
-                    if (!string.IsNullOrEmpty(filter) && name.IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0)
-                    {
-                        continue;
-                    }
                     var appId = Utils.GenerateShortcutAppId(exePath, name);
                     var inSteam = existingShortcuts.ContainsKey(appId);
-                    if (cbOnlyNew.IsChecked == true && inSteam) { continue; }
-                    var summary = $"{name} — " + (act.Type == GameActionType.File ? exePath : act.Path) + (inSteam ? " [Steam]" : string.Empty);
-                    var cb = new System.Windows.Controls.CheckBox { Content = BuildListItemWithPreview(summary, TryPickPlaynitePreview(g)), IsChecked = !inSteam, Tag = g, Margin = new System.Windows.Thickness(0, 4, 0, 4), Foreground = Brushes.White };
-                    cb.Checked += (_, __) => UpdateStatus();
-                    cb.Unchecked += (_, __) => UpdateStatus();
-                    checks.Add(cb);
-                    listPanel.Children.Add(cb);
-                }
-                UpdateStatus();
-            }
-
-            searchBar.TextChanged += (_, __) => Refresh();
-            cbOnlyNew.Checked += (_, __) => Refresh();
-            cbOnlyNew.Unchecked += (_, __) => Refresh();
-            Refresh();
-
-            btnSelectAll.Click += (_, __) => { foreach (var c in checks) c.IsChecked = true; UpdateStatus(); };
-            btnSelectNone.Click += (_, __) => { foreach (var c in checks) c.IsChecked = false; UpdateStatus(); };
-            btnInvert.Click += (_, __) => { foreach (var c in checks) c.IsChecked = !(c.IsChecked == true); UpdateStatus(); };
-            btnCancel.Click += (_, __) => { window.DialogResult = false; window.Close(); };
-            btnExport.Click += (_, __) =>
-            {
-                try
+                    var target = act.Type == GameActionType.File ? exePath : act.Path;
+                    return (name + " — " + target) + (inSteam ? " [Steam]" : string.Empty);
+                },
+                previewImage: g => TryPickPlaynitePreview(g),
+                isInitiallyChecked: g =>
                 {
-                    var selectedGames = checks.Where(c => c.IsChecked == true).Select(c => (Game)c.Tag).ToList();
+                    var act = g.GameActions?.FirstOrDefault(a => a.IsPlayAction) ?? g.GameActions?.FirstOrDefault();
+                    if (act == null || string.IsNullOrEmpty(act.Path)) return false;
+                    var exePath = act.Type == GameActionType.File ? (ExpandPathVariables(g, act.Path) ?? string.Empty) : "explorer.exe";
+                    var name = string.IsNullOrEmpty(g.Name) ? (Path.GetFileNameWithoutExtension(exePath) ?? string.Empty) : g.Name;
+                    var appId = Utils.GenerateShortcutAppId(exePath, name);
+                    var inSteam = existingShortcuts.ContainsKey(appId);
+                    return !inSteam;
+                },
+                isNew: g =>
+                {
+                    var act = g.GameActions?.FirstOrDefault(a => a.IsPlayAction) ?? g.GameActions?.FirstOrDefault();
+                    if (act == null || string.IsNullOrEmpty(act.Path)) return false;
+                    var exePath = act.Type == GameActionType.File ? (ExpandPathVariables(g, act.Path) ?? string.Empty) : "explorer.exe";
+                    var name = string.IsNullOrEmpty(g.Name) ? (Path.GetFileNameWithoutExtension(exePath) ?? string.Empty) : g.Name;
+                    var appId = Utils.GenerateShortcutAppId(exePath, name);
+                    return !existingShortcuts.ContainsKey(appId);
+                },
+                confirmLabel: "Create/Update Selected",
+                onConfirm: selectedGames =>
+                {
                     var res = AddGamesToSteamCore(selectedGames);
                     var msg = $"Steam shortcuts updated. Created: {res.Added}, Updated: {res.Updated}, Skipped: {res.Skipped}.";
                     PlayniteApi.Dialogs.ShowMessage(msg, Name);
-                    window.DialogResult = true; window.Close();
-                }
-                catch (Exception ex)
-                {
-                    Logger.Error(ex, "Export selection failed");
-                    PlayniteApi.Dialogs.ShowErrorMessage($"Failed: {ex.Message}", Name);
-                }
-            };
-
-            window.ShowDialog();
-
-            void UpdateStatus()
-            {
-                int selected = checks.Count(c => c.IsChecked == true);
-                int total = checks.Count;
-                statusText.Text = $"Selected: {selected} / {total}";
-            }
+                });
         }
         catch (Exception ex)
         {
             Logger.Error(ex, "Playnite→Steam sync failed");
             PlayniteApi.Dialogs.ShowErrorMessage($"Failed to sync: {ex.Message}", Name);
+        }
+    }
+
+    private void ShowSelectionDialog<T>(string title,
+        List<T> items,
+        Func<T, string> displayText,
+        Func<T, string?> previewImage,
+        Func<T, bool> isInitiallyChecked,
+        Func<T, bool> isNew,
+        string confirmLabel,
+        Action<List<T>> onConfirm)
+    {
+        var window = PlayniteApi.Dialogs.CreateWindow(new WindowCreationOptions { ShowCloseButton = true });
+        window.Title = title;
+        window.Width = 900;
+        window.Height = 650;
+        window.MinWidth = 720;
+        window.MinHeight = 480;
+
+        var grid = new System.Windows.Controls.Grid();
+        grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = new System.Windows.GridLength(1, System.Windows.GridUnitType.Star) });
+        grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = System.Windows.GridLength.Auto });
+
+        var topBar = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, Margin = new System.Windows.Thickness(12, 12, 12, 6) };
+        var lblFilter = new System.Windows.Controls.TextBlock { Text = "Filter:", Margin = new System.Windows.Thickness(0, 0, 8, 0), VerticalAlignment = System.Windows.VerticalAlignment.Center, Foreground = Brushes.White };
+        var searchBar = new System.Windows.Controls.TextBox { Width = 320, Margin = new System.Windows.Thickness(0, 0, 16, 0), Foreground = Brushes.White };
+        var btnSelectAll = new System.Windows.Controls.Button { Content = "Select All", Margin = new System.Windows.Thickness(0, 0, 8, 0), MinWidth = 100, Foreground = Brushes.White };
+        var btnSelectNone = new System.Windows.Controls.Button { Content = "Deselect All", MinWidth = 100, Foreground = Brushes.White };
+        var btnInvert = new System.Windows.Controls.Button { Content = "Invert", Margin = new System.Windows.Thickness(8, 0, 0, 0), MinWidth = 80, Foreground = Brushes.White };
+        var cbOnlyNew = new System.Windows.Controls.CheckBox { Content = "Only new", Margin = new System.Windows.Thickness(12, 0, 0, 0), VerticalAlignment = System.Windows.VerticalAlignment.Center, Foreground = Brushes.White };
+        topBar.Children.Add(lblFilter);
+        topBar.Children.Add(searchBar);
+        topBar.Children.Add(btnSelectAll);
+        topBar.Children.Add(btnSelectNone);
+        topBar.Children.Add(btnInvert);
+        topBar.Children.Add(cbOnlyNew);
+        var statusText = new System.Windows.Controls.TextBlock { Margin = new System.Windows.Thickness(16, 0, 0, 0), VerticalAlignment = System.Windows.VerticalAlignment.Center, Opacity = 1.0, Foreground = Brushes.White };
+        topBar.Children.Add(statusText);
+
+        var contentGrid = new System.Windows.Controls.Grid();
+        contentGrid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = System.Windows.GridLength.Auto });
+        contentGrid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = new System.Windows.GridLength(1, System.Windows.GridUnitType.Star) });
+        contentGrid.Children.Add(topBar);
+        var listPanel = new System.Windows.Controls.StackPanel { Margin = new System.Windows.Thickness(12, 0, 12, 0) };
+        var scroll = new System.Windows.Controls.ScrollViewer
+        {
+            Content = listPanel,
+            VerticalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Disabled
+        };
+        System.Windows.Controls.Grid.SetRow(scroll, 1);
+        contentGrid.Children.Add(scroll);
+        System.Windows.Controls.Grid.SetRow(contentGrid, 0);
+        grid.Children.Add(contentGrid);
+
+        var bottom = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, Margin = new System.Windows.Thickness(12, 6, 12, 12), HorizontalAlignment = System.Windows.HorizontalAlignment.Right };
+        var btnConfirm = new System.Windows.Controls.Button { Content = confirmLabel, Margin = new System.Windows.Thickness(0, 0, 8, 0), MinWidth = 150, Foreground = Brushes.White };
+        var btnCancel = new System.Windows.Controls.Button { Content = "Cancel", MinWidth = 100, Foreground = Brushes.White };
+        bottom.Children.Add(btnConfirm);
+        bottom.Children.Add(btnCancel);
+        System.Windows.Controls.Grid.SetRow(bottom, 1);
+        grid.Children.Add(bottom);
+
+        window.Content = grid;
+
+        var checks = new List<System.Windows.Controls.CheckBox>();
+
+        void Refresh()
+        {
+            var filter = searchBar.Text?.Trim() ?? string.Empty;
+            listPanel.Children.Clear();
+            checks.Clear();
+
+            foreach (var it in items)
+            {
+                var name = displayText(it) ?? string.Empty;
+                if (!string.IsNullOrEmpty(filter) && name.IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0)
+                {
+                    continue;
+                }
+                if (cbOnlyNew.IsChecked == true && !isNew(it))
+                {
+                    continue;
+                }
+                var cb = new System.Windows.Controls.CheckBox { Content = BuildListItemWithPreview(name, previewImage(it)), IsChecked = isInitiallyChecked(it), Tag = it, Margin = new System.Windows.Thickness(0, 4, 0, 4), Foreground = Brushes.White };
+                cb.Checked += (_, __) => UpdateStatus();
+                cb.Unchecked += (_, __) => UpdateStatus();
+                checks.Add(cb);
+                listPanel.Children.Add(cb);
+            }
+            UpdateStatus();
+        }
+
+        searchBar.TextChanged += (_, __) => Refresh();
+        cbOnlyNew.Checked += (_, __) => Refresh();
+        cbOnlyNew.Unchecked += (_, __) => Refresh();
+        Refresh();
+
+        btnSelectAll.Click += (_, __) => { foreach (var c in checks) c.IsChecked = true; UpdateStatus(); };
+        btnSelectNone.Click += (_, __) => { foreach (var c in checks) c.IsChecked = false; UpdateStatus(); };
+        btnInvert.Click += (_, __) => { foreach (var c in checks) c.IsChecked = !(c.IsChecked == true); UpdateStatus(); };
+        btnCancel.Click += (_, __) => { window.DialogResult = false; window.Close(); };
+        btnConfirm.Click += (_, __) =>
+        {
+            try
+            {
+                var selected = checks.Where(c => c.IsChecked == true).Select(c => (T)c.Tag).ToList();
+                onConfirm(selected);
+                window.DialogResult = true; window.Close();
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex, "Selection dialog confirm failed");
+                PlayniteApi.Dialogs.ShowErrorMessage($"Failed: {ex.Message}", Name);
+            }
+        };
+
+        window.ShowDialog();
+
+        void UpdateStatus()
+        {
+            int selected = checks.Count(c => c.IsChecked == true);
+            int total = checks.Count;
+            statusText.Text = $"Selected: {selected} / {total}";
         }
     }
 
