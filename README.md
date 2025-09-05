@@ -30,7 +30,6 @@ How To Use
   - Main menu → Steam Shortcuts → “Sync Playnite → Steam…”.
   - Pick Playnite games with a file play action to export; existing Steam entries are updated.
   - Covers/icons/backgrounds are exported into Steam’s grid folder.
-  - Tags and (optionally) your Playnite Categories are exported as Steam categories, so your shortcuts stay organized in Steam.
 - Automatic write‑backs (optional)
   - When enabled, editing a Steam Shortcuts game in Playnite (name/play action/tags/artwork) updates `shortcuts.vdf` and Steam grid files automatically.
 

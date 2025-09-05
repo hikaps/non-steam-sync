@@ -16,7 +16,6 @@ public class PluginSettings : ISettings
 
     public string SteamRootPath { get; set; } = string.Empty;
     public bool LaunchViaSteam { get; set; } = true;
-    public bool ExportCategoriesToSteam { get; set; } = true;
     public Dictionary<string, string> ExportMap { get; set; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
     public void BeginEdit() { }
@@ -51,14 +50,12 @@ public class PluginSettings : ISettings
             {
                 SteamRootPath = saved.SteamRootPath;
                 LaunchViaSteam = saved.LaunchViaSteam;
-                ExportCategoriesToSteam = saved.ExportCategoriesToSteam;
                 ExportMap = saved.ExportMap ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             }
             else
             {
                 SteamRootPath = GuessSteamRootPath() ?? string.Empty;
                 LaunchViaSteam = true;
-                ExportCategoriesToSteam = true;
                 ExportMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             }
         }
@@ -67,7 +64,6 @@ public class PluginSettings : ISettings
             LogManager.GetLogger().Error(ex, "Failed to load saved settings, falling back to defaults.");
             SteamRootPath = GuessSteamRootPath() ?? string.Empty;
             LaunchViaSteam = true;
-            ExportCategoriesToSteam = true;
             ExportMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         }
     }
@@ -133,10 +129,7 @@ public class PluginSettingsView : System.Windows.Controls.UserControl
         launchCheck.SetBinding(System.Windows.Controls.Primitives.ToggleButton.IsCheckedProperty,
             new System.Windows.Data.Binding("LaunchViaSteam") { Mode = System.Windows.Data.BindingMode.TwoWay });
         panel.Children.Add(launchCheck);
-        var catCheck = new System.Windows.Controls.CheckBox { Content = "Export Playnite categories as Steam categories", Margin = new System.Windows.Thickness(0,4,0,0) };
-        catCheck.SetBinding(System.Windows.Controls.Primitives.ToggleButton.IsCheckedProperty,
-            new System.Windows.Data.Binding("ExportCategoriesToSteam") { Mode = System.Windows.Data.BindingMode.TwoWay });
-        panel.Children.Add(catCheck);
+        //
         // Collections mirroring is experimental and lives on a separate branch.
         var backupBtn = new System.Windows.Controls.Button { Content = "Open Backup Folder", Margin = new System.Windows.Thickness(0,8,0,0), MinWidth = 160 };
         backupBtn.Click += (_, __) =>
@@ -546,15 +539,7 @@ public class ShortcutsLibrary : LibraryPlugin
                 IsInstalled = true,
                 GameActions = new System.Collections.ObjectModel.ObservableCollection<GameAction>(new[] { BuildPlayAction(sc) })
             };
-            if (sc.Tags?.Any() == true)
-            {
-                g.TagIds = new List<Guid>();
-                foreach (var tagName in sc.Tags.Distinct())
-                {
-                    var tag = PlayniteApi.Database.Tags.Add(tagName);
-                    g.TagIds.Add(tag.Id);
-                }
-            }
+            
             newGames.Add(g);
         }
 
@@ -915,26 +900,7 @@ public class ShortcutsLibrary : LibraryPlugin
                 sc.AppName = name; sc.Exe = exePath; sc.StartDir = workDir ?? sc.StartDir; updated++;
             }
 
-            // Build Steam categories from Playnite Tags (+ Categories if enabled)
-            var catNames = new List<string>();
-            if (g.TagIds?.Any() == true)
-            {
-                catNames.AddRange(g.TagIds
-                    .Select(id => PlayniteApi.Database.Tags.Get(id)?.Name)
-                    .Where(n => !string.IsNullOrWhiteSpace(n))
-                    .Select(n => n!));
-            }
-            if (settings.ExportCategoriesToSteam && g.CategoryIds?.Any() == true)
-            {
-                catNames.AddRange(g.CategoryIds
-                    .Select(id => PlayniteApi.Database.Categories.Get(id)?.Name)
-                    .Where(n => !string.IsNullOrWhiteSpace(n))
-                    .Select(n => n!));
-            }
-            if (catNames.Count > 0)
-            {
-                sc.Tags = catNames.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-            }
+            
 
             try
             {
@@ -1204,7 +1170,7 @@ public class ShortcutsLibrary : LibraryPlugin
                     GameId = chosenId,
                     InstallDirectory = string.IsNullOrEmpty(sc.StartDir) ? null : sc.StartDir,
                     Platforms = new HashSet<MetadataProperty> { new MetadataNameProperty("Windows") },
-                    Tags = new HashSet<MetadataProperty>((sc.Tags ?? Enumerable.Empty<string>()).Select(t => new MetadataNameProperty(t))),
+                    Tags = new HashSet<MetadataProperty>(),
                     Links = new List<Link>(),
                     IsInstalled = true,
                 };
@@ -1395,26 +1361,7 @@ public class ShortcutsLibrary : LibraryPlugin
                     sc.StartDir = dir ?? sc.StartDir;
                 }
 
-                // Build Steam categories from Playnite Tags (+ Categories if enabled)
-                var catNames = new List<string>();
-                if (game.TagIds?.Any() == true)
-                {
-                    catNames.AddRange(game.TagIds
-                        .Select(id => PlayniteApi.Database.Tags.Get(id)?.Name)
-                        .Where(n => !string.IsNullOrWhiteSpace(n))
-                        .Select(n => n!));
-                }
-                if (settings.ExportCategoriesToSteam && game.CategoryIds?.Any() == true)
-                {
-                    catNames.AddRange(game.CategoryIds
-                        .Select(id => PlayniteApi.Database.Categories.Get(id)?.Name)
-                        .Where(n => !string.IsNullOrWhiteSpace(n))
-                        .Select(n => n!));
-                }
-                if (catNames.Count > 0)
-                {
-                    sc.Tags = catNames.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-                }
+                
 
                 if (sc.AppId == 0)
                 {
