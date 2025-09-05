@@ -18,6 +18,7 @@ public class PluginSettings : ISettings
     public bool LaunchViaSteam { get; set; } = true;
     public bool ExportCategoriesToSteam { get; set; } = true;
     public bool MirrorToSteamCollections { get; set; } = true;
+    public Dictionary<string, string> ExportMap { get; set; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
     public void BeginEdit() { }
     public void CancelEdit() { }
@@ -53,6 +54,7 @@ public class PluginSettings : ISettings
                 LaunchViaSteam = saved.LaunchViaSteam;
                 ExportCategoriesToSteam = saved.ExportCategoriesToSteam;
                 MirrorToSteamCollections = saved.MirrorToSteamCollections;
+                ExportMap = saved.ExportMap ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             }
             else
             {
@@ -60,6 +62,7 @@ public class PluginSettings : ISettings
                 LaunchViaSteam = true;
                 ExportCategoriesToSteam = true;
                 MirrorToSteamCollections = true;
+                ExportMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             }
         }
         catch (Exception ex)
@@ -69,6 +72,7 @@ public class PluginSettings : ISettings
             LaunchViaSteam = true;
             ExportCategoriesToSteam = true;
             MirrorToSteamCollections = true;
+            ExportMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         }
     }
 
@@ -510,6 +514,28 @@ public class ShortcutsLibrary : LibraryPlugin
         {
             try
             {
+                // Mapping-based: if this appId was exported from an existing Playnite game, treat as duplicate
+                if (sc.AppId != 0 && lib.settings.ExportMap.TryGetValue(sc.AppId.ToString(), out var pgid))
+                {
+                    if (Guid.TryParse(pgid, out var gid))
+                    {
+                        var mapped = lib.PlayniteApi.Database.Games.Get(gid);
+                        if (mapped != null)
+                        {
+                            return true;
+                        }
+                    }
+                }
+
+                // 0) Aggressive: if any non-shortcuts game with the same name exists, treat as duplicate
+                // This prevents re-importing shortcuts for games already present from other libraries (e.g., Steam/GOG/Epic)
+                var nameMatch = lib.PlayniteApi.Database.Games.FirstOrDefault(x =>
+                    !x.Hidden && x.PluginId != lib.Id && string.Equals(x.Name, sc.AppName, StringComparison.OrdinalIgnoreCase));
+                if (nameMatch != null)
+                {
+                    return true;
+                }
+
                 // 1) Library-level ID match (stable or appid-string)
                 if (FindLibraryGameByIds(sc) != null)
                 {
@@ -546,6 +572,11 @@ public class ShortcutsLibrary : LibraryPlugin
                         if (act?.Type == GameActionType.URL && !string.IsNullOrEmpty(act.Path))
                         {
                             if (string.Equals(act.Path, expectedUrl, StringComparison.OrdinalIgnoreCase))
+                            {
+                                return true;
+                            }
+                            // Also consider official Steam app rungameid scheme for same name
+                            if (act.Path.StartsWith("steam://", StringComparison.OrdinalIgnoreCase))
                             {
                                 return true;
                             }
@@ -852,6 +883,17 @@ public class ShortcutsLibrary : LibraryPlugin
             {
                 sc.LaunchOptions = ExpandPathVariables(g, action.Arguments);
             }
+
+            // Record export mapping: appId -> Playnite game Id
+            try
+            {
+                if (g.Id != Guid.Empty)
+                {
+                    settings.ExportMap[appId.ToString()] = g.Id.ToString();
+                    SavePluginSettings(settings);
+                }
+            }
+            catch { }
         }
 
         WriteShortcutsWithBackup(vdfPath!, shortcuts);
