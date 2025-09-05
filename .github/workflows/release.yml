@@ -25,23 +25,53 @@ jobs:
       - name: Build
         run: dotnet build src/SteamShortcutsImporter/SteamShortcutsImporter.csproj -c Release
 
-      - name: Package .pext
+      - name: Stage files for Toolbox pack
         shell: pwsh
         run: |
-          $dll = Join-Path "src/SteamShortcutsImporter/bin/Release/net462" "SteamShortcutsImporter.dll"
+          $outDir = "src/SteamShortcutsImporter/bin/Release/net462"
           $manifest = "src/SteamShortcutsImporter/extension.yaml"
           $icon = "src/SteamShortcutsImporter/icon.png"
+          if (!(Test-Path $outDir)) { throw "Build output not found: $outDir" }
+          Copy-Item $manifest $outDir -Force
+          if (Test-Path $icon) { Copy-Item $icon $outDir -Force }
+
+      - name: Download Playnite Portable (Toolbox)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $version = '10.32'
+          $zipUrl = "https://github.com/JosefNemec/Playnite/releases/download/$version/Playnite-$version.zip"
+          $zipPath = "$env:RUNNER_TEMP\Playnite.zip"
+          $dest = "$env:RUNNER_TEMP\Playnite"
+          Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath
+          Expand-Archive -Path $zipPath -DestinationPath $dest -Force
+          "TOOLBOX_PATH=$dest\Toolbox.exe" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Pack with Toolbox
+        shell: pwsh
+        run: |
+          $toolbox = $env:TOOLBOX_PATH
+          if (!(Test-Path $toolbox)) { throw "Toolbox.exe not found at $toolbox" }
+          $src = Resolve-Path "src/SteamShortcutsImporter/bin/Release/net462"
           if (Test-Path "SteamShortcutsImporter.pext") { Remove-Item "SteamShortcutsImporter.pext" -Force }
-          $paths = @($dll, $manifest)
-          if (Test-Path $icon) { $paths += $icon }
-          Compress-Archive -Path $paths -DestinationPath "SteamShortcutsImporter.pext"
-      
+          & $toolbox pack $src . | Write-Host
+
       - name: Rename artifact with tag
         shell: pwsh
         run: |
           $tag = "$env:GITHUB_REF_NAME"
           if ([string]::IsNullOrEmpty($tag)) { $tag = "dev" }
           Rename-Item -Path "SteamShortcutsImporter.pext" -NewName "SteamShortcutsImporter-$tag.pext"
+
+      - name: Verify addon manifest (optional)
+        shell: pwsh
+        run: |
+          $toolbox = $env:TOOLBOX_PATH
+          if (Test-Path ".\addon.yaml") {
+            & $toolbox verify addon ".\addon.yaml" | Write-Host
+          } else {
+            Write-Host "No addon.yaml found, skipping verify."
+          }
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
