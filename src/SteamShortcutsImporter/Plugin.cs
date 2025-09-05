@@ -1139,11 +1139,10 @@ public class ShortcutsLibrary : LibraryPlugin
             var files = new List<string>();
             foreach (var userDir in Directory.EnumerateDirectories(userdata))
             {
-                var cfg = Path.Combine(userDir, "7", "remote", "sharedconfig.vdf");
-                if (File.Exists(cfg))
-                {
-                    files.Add(cfg);
-                }
+                var cfg1 = Path.Combine(userDir, "7", "remote", "sharedconfig.vdf");
+                var cfg2 = Path.Combine(userDir, "config", "sharedconfig.vdf");
+                if (File.Exists(cfg1)) { files.Add(cfg1); }
+                if (File.Exists(cfg2)) { files.Add(cfg2); }
             }
             return files;
         }
@@ -1165,6 +1164,7 @@ public class ShortcutsLibrary : LibraryPlugin
             {
                 try
                 {
+                    Logger.Info($"Updating Collections in sharedconfig: '{shared}' for appId '{appId}'");
                     var root = TextKv.Read(shared);
                     var appsNode = FindAppsNode(root) ?? EnsureAppsNode(root);
                     if (appsNode == null) { continue; }
