@@ -145,6 +145,32 @@ public class PluginSettingsView : System.Windows.Controls.UserControl
         collCheck.SetBinding(System.Windows.Controls.Primitives.ToggleButton.IsCheckedProperty,
             new System.Windows.Data.Binding("MirrorToSteamCollections") { Mode = System.Windows.Data.BindingMode.TwoWay });
         panel.Children.Add(collCheck);
+        var backupBtn = new System.Windows.Controls.Button { Content = "Open Backup Folder", Margin = new System.Windows.Thickness(0,8,0,0), MinWidth = 160 };
+        backupBtn.Click += (_, __) =>
+        {
+            try
+            {
+                // Traverse to owning library plugin via Application.Current? We added a helper on ShortcutsLibrary.
+                var app = System.Windows.Application.Current;
+                if (app != null)
+                {
+                    foreach (var win in app.Windows)
+                    {
+                        // no reliable reference; directly compute via static path discovery
+                        break;
+                    }
+                }
+                var libDataDir = ShortcutsLibrary.TryGetBackupRootStatic();
+                if (!string.IsNullOrEmpty(libDataDir))
+                {
+                    System.IO.Directory.CreateDirectory(libDataDir);
+                    var psi = new System.Diagnostics.ProcessStartInfo { FileName = libDataDir, UseShellExecute = true };
+                    System.Diagnostics.Process.Start(psi);
+                }
+            }
+            catch { }
+        };
+        panel.Children.Add(backupBtn);
         Content = panel;
     }
 }
@@ -153,12 +179,14 @@ public class ShortcutsLibrary : LibraryPlugin
 {
     private static readonly ILogger Logger = LogManager.GetLogger();
     private const string MenuSection = "@Steam Shortcuts";
+    private static ShortcutsLibrary? Instance;
 
     private readonly PluginSettings settings;
     private readonly Guid pluginId = Guid.Parse("f15771cd-b6d7-4a3d-9b8e-08786a13d9c7");
 
     public ShortcutsLibrary(IPlayniteAPI api) : base(api)
     {
+        Instance = this;
         try
         {
             settings = new PluginSettings(this);
@@ -193,6 +221,70 @@ public class ShortcutsLibrary : LibraryPlugin
     {
         var view = new PluginSettingsView { DataContext = settings };
         return view;
+    }
+
+    internal string GetBackupRootDir()
+    {
+        try
+        {
+            return Path.Combine(GetPluginUserDataPath(), "backups");
+        }
+        catch { return string.Empty; }
+    }
+
+    internal static string? TryGetBackupRootStatic()
+    {
+        return Instance?.GetBackupRootDir();
+    }
+
+    private void CreateManagedBackup(string sourceFilePath, string kind)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(sourceFilePath) || !File.Exists(sourceFilePath)) return;
+            var root = GetBackupRootDir();
+            if (string.IsNullOrEmpty(root)) return;
+            var dir = Path.Combine(root, kind);
+            Directory.CreateDirectory(dir);
+
+            string sourceName = Path.GetFileNameWithoutExtension(sourceFilePath);
+            string userSegment = TryGetSteamUserFromPath(sourceFilePath) ?? "user";
+            string ts = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            string backupName = $"{kind}-{userSegment}-{sourceName}-{ts}.bak.vdf";
+            string dst = Path.Combine(dir, backupName);
+            File.Copy(sourceFilePath, dst, overwrite: true);
+
+            // keep last 5 backups for this kind/user/sourceName
+            var patternPrefix = $"{kind}-{userSegment}-{sourceName}-";
+            var files = new DirectoryInfo(dir)
+                .GetFiles("*.bak.vdf")
+                .Where(f => f.Name.StartsWith(patternPrefix, StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(f => f.LastWriteTimeUtc)
+                .ToList();
+            for (int i = 5; i < files.Count; i++)
+            {
+                try { files[i].Delete(); } catch { }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn(ex, $"Failed to create managed backup for '{sourceFilePath}'");
+        }
+    }
+
+    private static string? TryGetSteamUserFromPath(string path)
+    {
+        try
+        {
+            var parts = path.Split(new[] { '\\', '/' }, StringSplitOptions.RemoveEmptyEntries);
+            int idx = Array.FindIndex(parts, p => string.Equals(p, "userdata", StringComparison.OrdinalIgnoreCase));
+            if (idx >= 0 && idx + 1 < parts.Length)
+            {
+                return parts[idx + 1];
+            }
+        }
+        catch { }
+        return null;
     }
 
     public override IEnumerable<MainMenuItem> GetMainMenuItems(GetMainMenuItemsArgs args)
@@ -1077,7 +1169,9 @@ public class ShortcutsLibrary : LibraryPlugin
                     var appsNode = FindAppsNode(root) ?? EnsureAppsNode(root);
                     if (appsNode == null) { continue; }
 
-                    var gameKey = Utils.ToShortcutGameId(appId).ToString();
+            // In sharedconfig.vdf, app keys under "apps" use the 32-bit appid string,
+            // not the 64-bit rungameid. For non-Steam shortcuts this is the CRC|0x80000000 value.
+            var gameKey = appId.ToString();
                     if (!appsNode.TryGetValue(gameKey, out var gv) || gv is not Dictionary<string, object> gameNode)
                     {
                         gameNode = new Dictionary<string, object>(StringComparer.Ordinal);
@@ -1173,14 +1267,7 @@ public class ShortcutsLibrary : LibraryPlugin
     {
         try
         {
-            if (File.Exists(path))
-            {
-                var dir = Path.GetDirectoryName(path) ?? string.Empty;
-                var name = Path.GetFileNameWithoutExtension(path);
-                var ts = DateTime.Now.ToString("yyyyMMdd_HHmmss");
-                var bak = Path.Combine(dir, $"{name}.{ts}.bak.vdf");
-                File.Copy(path, bak, overwrite: true);
-            }
+            CreateManagedBackup(path, "sharedconfig");
         }
         catch (Exception ex)
         {
@@ -1573,14 +1660,7 @@ public class ShortcutsLibrary : LibraryPlugin
     {
         try
         {
-            if (File.Exists(vdfPath))
-            {
-                var dir = Path.GetDirectoryName(vdfPath) ?? string.Empty;
-                var name = Path.GetFileNameWithoutExtension(vdfPath);
-                var ts = DateTime.Now.ToString("yyyyMMdd_HHmmss");
-                var bak = Path.Combine(dir, $"{name}.{ts}.bak.vdf");
-                File.Copy(vdfPath, bak, overwrite: true);
-            }
+            CreateManagedBackup(vdfPath, "shortcuts");
         }
         catch (Exception ex)
         {
