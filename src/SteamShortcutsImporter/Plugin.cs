@@ -886,6 +886,16 @@ public class ShortcutsLibrary : LibraryPlugin
                 }
             }
             catch { }
+
+            // Ensure Playnite game has Steam rungameid action as default
+            try
+            {
+                if (settings.LaunchViaSteam && appId != 0)
+                {
+                    EnsureSteamPlayActionForExternalGame(g, appId);
+                }
+            }
+            catch { }
         }
 
         WriteShortcutsWithBackup(vdfPath!, shortcuts);
@@ -1243,6 +1253,34 @@ public class ShortcutsLibrary : LibraryPlugin
         {
             Logger.Warn(ex, $"Failed to ensure Steam play action for game '{game.Name}'");
         }
+    }
+
+    private void EnsureSteamPlayActionForExternalGame(Game game, uint appId)
+    {
+        if (appId == 0) return;
+        var expectedUrl = $"steam://rungameid/{Utils.ToShortcutGameId(appId)}";
+        var actions = game.GameActions?.ToList() ?? new List<GameAction>();
+
+        var existingSteam = actions.FirstOrDefault(a => a.Type == GameActionType.URL && string.Equals(a.Path, expectedUrl, StringComparison.OrdinalIgnoreCase));
+        if (existingSteam != null && existingSteam.IsPlayAction)
+        {
+            return;
+        }
+
+        var steamAction = new GameAction
+        {
+            Name = "Play (Steam)",
+            Type = GameActionType.URL,
+            Path = expectedUrl,
+            IsPlayAction = true
+        };
+
+        foreach (var a in actions) a.IsPlayAction = false;
+        actions.Insert(0, steamAction);
+
+        game.IsInstalled = true;
+        game.GameActions = new System.Collections.ObjectModel.ObservableCollection<GameAction>(actions);
+        PlayniteApi.Database.Games.Update(game);
     }
 
     private string? ResolveShortcutsVdfPath()
