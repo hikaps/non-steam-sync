@@ -129,23 +129,11 @@ public class PluginSettingsView : System.Windows.Controls.UserControl
         launchCheck.SetBinding(System.Windows.Controls.Primitives.ToggleButton.IsCheckedProperty,
             new System.Windows.Data.Binding("LaunchViaSteam") { Mode = System.Windows.Data.BindingMode.TwoWay });
         panel.Children.Add(launchCheck);
-        //
-        // Collections mirroring is experimental and lives on a separate branch.
         var backupBtn = new System.Windows.Controls.Button { Content = "Open Backup Folder", Margin = new System.Windows.Thickness(0,8,0,0), MinWidth = 160 };
         backupBtn.Click += (_, __) =>
         {
             try
             {
-                // Traverse to owning library plugin via Application.Current? We added a helper on ShortcutsLibrary.
-                var app = System.Windows.Application.Current;
-                if (app != null)
-                {
-                    foreach (var win in app.Windows)
-                    {
-                        // no reliable reference; directly compute via static path discovery
-                        break;
-                    }
-                }
                 var libDataDir = ShortcutsLibrary.TryGetBackupRootStatic();
                 if (!string.IsNullOrEmpty(libDataDir))
                 {
@@ -991,8 +979,6 @@ public class ShortcutsLibrary : LibraryPlugin
             Logger.Warn(ex, $"Failed exporting artwork to grid for appId={appId}");
         }
     }
-
-    // Collections mirroring code removed from main branch (experimental on feature/collections-experimental)
 
     private object BuildListItemWithPreview(string text, string? imagePath)
     {
