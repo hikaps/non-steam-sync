@@ -39,11 +39,15 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $version = '10.32'
-          $zipUrl = "https://github.com/JosefNemec/Playnite/releases/download/$version/Playnite-$version.zip"
           $zipPath = "$env:RUNNER_TEMP\Playnite.zip"
           $dest = "$env:RUNNER_TEMP\Playnite"
-          Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath
+          $headers = @{ 'Accept' = 'application/vnd.github+json' }
+          if ($env:GITHUB_TOKEN) { $headers['Authorization'] = "Bearer $env:GITHUB_TOKEN" }
+          $rel = Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/JosefNemec/Playnite/releases/latest"
+          $asset = $rel.assets | Where-Object { $_.name -like 'Playnite-*.zip' } | Select-Object -First 1
+          if (-not $asset) { throw "Could not find Playnite portable zip asset in latest release." }
+          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zipPath
+          if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }
           Expand-Archive -Path $zipPath -DestinationPath $dest -Force
           "TOOLBOX_PATH=$dest\Toolbox.exe" | Out-File -FilePath $env:GITHUB_ENV -Append
 
