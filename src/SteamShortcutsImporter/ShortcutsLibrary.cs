@@ -46,7 +46,7 @@ public class ShortcutsLibrary : LibraryPlugin
 
     public override Guid Id => pluginId;
 
-    public override string Name => "Steam Shortcuts";
+    public override string Name => Constants.PluginName;
 
     public override ISettings GetSettings(bool firstRunSettings) => Settings;
 
@@ -131,13 +131,13 @@ public class ShortcutsLibrary : LibraryPlugin
     {
         yield return new MainMenuItem
         {
-            Description = "Steam Shortcuts: Sync Steam → Playnite…",
+            Description = Constants.SteamToPlayniteMenuDescription,
             MenuSection = Constants.MenuSection,
             Action = _ => { ShowImportDialog(); }
         };
         yield return new MainMenuItem
         {
-            Description = "Steam Shortcuts: Sync Playnite → Steam…",
+            Description = Constants.PlayniteToSteamMenuDescription,
             MenuSection = Constants.MenuSection,
             Action = _ => { ShowAddToSteamDialog(); }
         };
@@ -149,7 +149,7 @@ public class ShortcutsLibrary : LibraryPlugin
         {
             yield return new GameMenuItem
             {
-                Description = "Add/Update in Steam",
+                Description = Constants.GameMenuAddUpdateDescription,
                 MenuSection = Constants.GameMenuSection,
                 Action = _ =>
                 {
@@ -160,7 +160,7 @@ public class ShortcutsLibrary : LibraryPlugin
 
             yield return new GameMenuItem
             {
-                Description = "Copy Steam Launch URL",
+                Description = Constants.GameMenuCopyLaunchDescription,
                 MenuSection = Constants.GameMenuSection,
                 Action = _ =>
                 {
@@ -176,7 +176,7 @@ public class ShortcutsLibrary : LibraryPlugin
                         var appId = Utils.GenerateShortcutAppId(exe, g.Name);
                         var url = $"{Constants.SteamRungameIdUrl}{Utils.ToShortcutGameId(appId)}";
                         System.Windows.Clipboard.SetText(url);
-                        PlayniteApi.Dialogs.ShowMessage("Copied launch URL to clipboard.", Name);
+                        PlayniteApi.Dialogs.ShowMessage(Constants.CopyLaunchUrlMessage, Name);
                     }
                     catch (Exception ex)
                     {
@@ -187,14 +187,18 @@ public class ShortcutsLibrary : LibraryPlugin
 
             yield return new GameMenuItem
             {
-                Description = "Open Steam Grid Folder",
+                Description = Constants.GameMenuOpenGridDescription,
                 MenuSection = Constants.GameMenuSection,
                 Action = _ =>
                 {
                     try
                     {
                         var vdf = ResolveShortcutsVdfPath();
-                        var grid = string.IsNullOrEmpty(vdf) ? null : TryGetGridDirFromVdf(vdf);
+                        string? grid = null;
+                        if (!string.IsNullOrEmpty(vdf))
+                        {
+                            grid = TryGetGridDirFromVdf(vdf!);
+                        }
                         if (!string.IsNullOrEmpty(grid) && Directory.Exists(grid))
                         {
                             var psi = new System.Diagnostics.ProcessStartInfo { FileName = grid, UseShellExecute = true };
@@ -202,7 +206,7 @@ public class ShortcutsLibrary : LibraryPlugin
                         }
                         else
                         {
-                            PlayniteApi.Dialogs.ShowErrorMessage("Grid folder not found. Check Steam path in settings.", Name);
+                            PlayniteApi.Dialogs.ShowErrorMessage(Constants.GridFolderNotFoundMessage, Name);
                         }
                     }
                     catch (Exception ex)
@@ -219,7 +223,7 @@ public class ShortcutsLibrary : LibraryPlugin
         var vdfPath = ResolveShortcutsVdfPath();
         if (string.IsNullOrWhiteSpace(vdfPath) || !File.Exists(vdfPath))
         {
-            PlayniteApi.Dialogs.ShowErrorMessage("Set a valid Steam library path in settings.", Name);
+            PlayniteApi.Dialogs.ShowErrorMessage(Constants.SteamPathRequiredMessage, Name);
             return;
         }
         try
@@ -229,7 +233,7 @@ public class ShortcutsLibrary : LibraryPlugin
             var gridDir = TryGetGridDirFromVdf(vdfPath!);
 
             ShowSelectionDialog(
-                title: "Steam Shortcuts — Select Items to Import",
+                title: Constants.ImportDialogTitle,
                 items: shortcuts.OrderBy(s => s.AppName, StringComparer.OrdinalIgnoreCase).ToList(),
                 displayText: sc =>
                 {
@@ -337,7 +341,7 @@ public class ShortcutsLibrary : LibraryPlugin
         var vdfPath = ResolveShortcutsVdfPath();
         if (string.IsNullOrWhiteSpace(vdfPath))
         {
-            PlayniteApi.Dialogs.ShowErrorMessage("Set a valid Steam library path in settings.", Name);
+            PlayniteApi.Dialogs.ShowErrorMessage(Constants.SteamPathRequiredMessage, Name);
             return;
         }
         try
@@ -347,16 +351,20 @@ public class ShortcutsLibrary : LibraryPlugin
             var existingShortcuts = shortcuts.ToDictionary(s => s.AppId, s => s);
 
             ShowSelectionDialog(
-                title: "Steam Shortcuts — Select Items to Export",
+                title: Constants.ExportDialogTitle,
                 items: allGames.OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase).ToList(),
                 displayText: g =>
                 {
                     var act = g.GameActions?.FirstOrDefault(a => a.IsPlayAction) ?? g.GameActions?.FirstOrDefault();
-                    var exePath = act.Type == GameActionType.File ? (ExpandPathVariables(g, act.Path) ?? string.Empty) : Constants.ExplorerExe;
-                    var name = string.IsNullOrEmpty(g.Name) ? (Path.GetFileNameWithoutExtension(exePath) ?? string.Empty) : g.Name;
+                    var exePath = Constants.ExplorerExe;
+                    if (act != null && act.Type == GameActionType.File)
+                    {
+                        exePath = ExpandPathVariables(g, act.Path) ?? string.Empty;
+                    }
+                    var name = string.IsNullOrEmpty(g.Name) ? (Path.GetFileNameWithoutExtension(exePath) ?? string.Empty) : (g.Name ?? string.Empty);
                     var appId = Utils.GenerateShortcutAppId(exePath, name);
                     var inSteam = existingShortcuts.ContainsKey(appId);
-                    var target = act.Type == GameActionType.File ? exePath : act.Path;
+                    var target = act != null ? (act.Type == GameActionType.File ? exePath : act.Path ?? string.Empty) : string.Empty;
                     return (name + " — " + target) + (inSteam ? Constants.SteamTag : string.Empty);
                 },
                 previewImage: g => TryPickPlaynitePreview(g),
@@ -546,7 +554,7 @@ public class ShortcutsLibrary : LibraryPlugin
         var vdfPath = ResolveShortcutsVdfPath();
         if (string.IsNullOrWhiteSpace(vdfPath))
         {
-            PlayniteApi.Dialogs.ShowErrorMessage("Set a valid Steam library path in settings.", Name);
+            PlayniteApi.Dialogs.ShowErrorMessage(Constants.SteamPathRequiredMessage, Name);
             return;
         }
 
@@ -697,7 +705,7 @@ public class ShortcutsLibrary : LibraryPlugin
         }
         else if (action.Type == GameActionType.File)
         {
-            sc.LaunchOptions = ExpandPathVariables(g, action.Arguments);
+            sc.LaunchOptions = ExpandPathVariables(g, action.Arguments) ?? string.Empty;
         }
 
         try
@@ -790,7 +798,7 @@ public class ShortcutsLibrary : LibraryPlugin
         try
         {
             if (string.IsNullOrWhiteSpace(url)) return 0;
-            var val = url.Trim();
+            var val = url!.Trim();
             const string prefix = "steam://rungameid/";
             if (!val.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) return 0;
             var idStr = val.Substring(prefix.Length);
@@ -957,7 +965,7 @@ public class ShortcutsLibrary : LibraryPlugin
     private static bool LooksLikeUrl(string? s)
     {
         if (string.IsNullOrWhiteSpace(s)) return false;
-        var val = s.Trim();
+        var val = s!.Trim();
         return val.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
             || val.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
             || val.StartsWith("steam://", StringComparison.OrdinalIgnoreCase);

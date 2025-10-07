@@ -3,8 +3,19 @@ namespace SteamShortcutsImporter;
 
 internal static class Constants
 {
+    public const string PluginName = "Steam Shortcuts";
     public const string MenuSection = "@Steam Shortcuts";
     public const string GameMenuSection = "Steam Shortcuts";
+    public const string SteamToPlayniteMenuDescription = "Steam Shortcuts: Sync Steam → Playnite…";
+    public const string PlayniteToSteamMenuDescription = "Steam Shortcuts: Sync Playnite → Steam…";
+    public const string GameMenuAddUpdateDescription = "Add/Update in Steam";
+    public const string GameMenuCopyLaunchDescription = "Copy Steam Launch URL";
+    public const string GameMenuOpenGridDescription = "Open Steam Grid Folder";
+    public const string GridFolderNotFoundMessage = "Grid folder not found. Check Steam path in settings.";
+    public const string SteamPathRequiredMessage = "Set a valid Steam library path in settings.";
+    public const string CopyLaunchUrlMessage = "Copied launch URL to clipboard.";
+    public const string ImportDialogTitle = "Steam Shortcuts — Select Items to Import";
+    public const string ExportDialogTitle = "Steam Shortcuts — Select Items to Export";
     public const string ShortcutsKind = "shortcuts";
     public const string BackupsDirectory = "backups";
     public const string SteamRungameIdUrl = "steam://rungameid/";
