@@ -1,4 +1,3 @@
-using System;
 using Xunit;
 
 namespace SteamShortcutsImporter.Tests;
@@ -24,4 +23,3 @@ public class DuplicateUtilsTests
         Assert.Equal(expected, DuplicateUtils.ExpectedRungameUrl(appId));
     }
 }
-

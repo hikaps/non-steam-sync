@@ -3,7 +3,12 @@
     <TargetFramework>net6.0</TargetFramework>
     <IsPackable>false</IsPackable>
     <Nullable>enable</Nullable>
+    <RollForward>LatestMajor</RollForward>
   </PropertyGroup>
+
+  <ItemGroup>
+    <RuntimeHostConfigurationOption Include="System.Runtime.RollForward" Value="LatestMajor" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="xunit" Version="2.7.1" />
@@ -12,15 +17,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="..\..\src\SteamShortcutsImporter\ShortcutsFile.cs">
-      <Link>ShortcutsFile.cs</Link>
-    </Compile>
-    <Compile Include="..\..\src\SteamShortcutsImporter\DuplicateUtils.cs">
-      <Link>DuplicateUtils.cs</Link>
-    </Compile>
-    <None Include="..\..\shortcuts.vdf">
-      <Link>shortcuts.vdf</Link>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
+    <ProjectReference Include="..\..\src\SteamShortcutsImporter\SteamShortcutsImporter.csproj" />
   </ItemGroup>
 </Project>
