@@ -330,12 +330,6 @@ public class ShortcutsLibrary : LibraryPlugin
         return newGames.Count;
     }
 
-    private bool ExistsAnyGameMatch(SteamShortcut sc)
-    {
-        var detector = new DuplicateDetector(this);
-        return detector.ExistsAnyGameMatch(sc);
-    }
-
     private void ShowAddToSteamDialog()
     {
         var vdfPath = ResolveShortcutsVdfPath();
@@ -348,44 +342,70 @@ public class ShortcutsLibrary : LibraryPlugin
         {
             var allGames = PlayniteApi.Database.Games.Where(g => !g.Hidden).ToList();
             var shortcuts = File.Exists(vdfPath) ? ShortcutsFile.Read(vdfPath!).ToList() : new List<SteamShortcut>();
-            var existingShortcuts = shortcuts.ToDictionary(s => s.AppId, s => s);
+            var existingShortcuts = new Dictionary<uint, SteamShortcut>();
+            var existingByStable = new Dictionary<string, SteamShortcut>(StringComparer.OrdinalIgnoreCase);
+            foreach (var sc in shortcuts)
+            {
+                existingShortcuts[sc.AppId] = sc;
+                if (!string.IsNullOrEmpty(sc.StableId) && !existingByStable.ContainsKey(sc.StableId))
+                {
+                    existingByStable[sc.StableId] = sc;
+                }
+            }
+            var byPlayniteId = BuildPlayniteIdLookup();
+
+            var detectionById = new Dictionary<Guid, SelectionCandidate>();
+            var detectionByRef = new Dictionary<Game, SelectionCandidate>();
+
+            SelectionCandidate GetCandidate(Game game)
+            {
+                if (game == null)
+                {
+                    return SelectionCandidate.Empty;
+                }
+
+                if (game.Id != Guid.Empty && detectionById.TryGetValue(game.Id, out var cached))
+                {
+                    return cached;
+                }
+
+                if (game.Id == Guid.Empty && detectionByRef.TryGetValue(game, out cached))
+                {
+                    return cached;
+                }
+
+                var computed = BuildSelectionCandidate(game, existingShortcuts, existingByStable, byPlayniteId);
+                if (game.Id != Guid.Empty)
+                {
+                    detectionById[game.Id] = computed;
+                }
+                else
+                {
+                    detectionByRef[game] = computed;
+                }
+                return computed;
+            }
 
             ShowSelectionDialog(
                 title: Constants.ExportDialogTitle,
                 items: allGames.OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase).ToList(),
                 displayText: g =>
                 {
-                    var act = g.GameActions?.FirstOrDefault(a => a.IsPlayAction) ?? g.GameActions?.FirstOrDefault();
-                    var exePath = Constants.ExplorerExe;
-                    if (act != null && act.Type == GameActionType.File)
-                    {
-                        exePath = ExpandPathVariables(g, act.Path) ?? string.Empty;
-                    }
-                    var name = string.IsNullOrEmpty(g.Name) ? (Path.GetFileNameWithoutExtension(exePath) ?? string.Empty) : (g.Name ?? string.Empty);
-                    var appId = Utils.GenerateShortcutAppId(exePath, name);
-                    var inSteam = existingShortcuts.ContainsKey(appId);
-                    var target = act != null ? (act.Type == GameActionType.File ? exePath : act.Path ?? string.Empty) : string.Empty;
-                    return (name + " — " + target) + (inSteam ? Constants.SteamTag : string.Empty);
+                    var candidate = GetCandidate(g);
+                    return string.IsNullOrEmpty(candidate.Label)
+                        ? $"{g?.Name ?? string.Empty} — "
+                        : candidate.Label;
                 },
                 previewImage: g => TryPickPlaynitePreview(g),
                 isInitiallyChecked: g =>
                 {
-                    var act = g.GameActions?.FirstOrDefault(a => a.IsPlayAction) ?? g.GameActions?.FirstOrDefault();
-                    if (act == null || string.IsNullOrEmpty(act.Path)) return false;
-                    var exePath = act.Type == GameActionType.File ? (ExpandPathVariables(g, act.Path) ?? string.Empty) : Constants.ExplorerExe;
-                    var name = string.IsNullOrEmpty(g.Name) ? (Path.GetFileNameWithoutExtension(exePath) ?? string.Empty) : g.Name;
-                    var appId = Utils.GenerateShortcutAppId(exePath, name);
-                    var inSteam = existingShortcuts.ContainsKey(appId);
-                    return !inSteam;
+                    var candidate = GetCandidate(g);
+                    return candidate.ShouldSelect;
                 },
                 isNew: g =>
                 {
-                    var act = g.GameActions?.FirstOrDefault(a => a.IsPlayAction) ?? g.GameActions?.FirstOrDefault();
-                    if (act == null || string.IsNullOrEmpty(act.Path)) return false;
-                    var exePath = act.Type == GameActionType.File ? (ExpandPathVariables(g, act.Path) ?? string.Empty) : Constants.ExplorerExe;
-                    var name = string.IsNullOrEmpty(g.Name) ? (Path.GetFileNameWithoutExtension(exePath) ?? string.Empty) : g.Name;
-                    var appId = Utils.GenerateShortcutAppId(exePath, name);
-                    return !existingShortcuts.ContainsKey(appId);
+                    var candidate = GetCandidate(g);
+                    return candidate.IsNew;
                 },
                 confirmLabel: Constants.ExportConfirmLabel,
                 onConfirm: selectedGames =>
@@ -413,14 +433,14 @@ public class ShortcutsLibrary : LibraryPlugin
     {
         var window = CreateSelectionWindow(title);
         var (topBar, searchBar, cbOnlyNew, statusText) = CreateTopBar();
-        var (listPanel, scrollViewer) = CreateMainContent(topBar);
+        var (listPanel, contentPanel) = CreateMainContent(topBar);
         var (bottomBar, btnConfirm, btnCancel) = CreateBottomBar(confirmLabel);
 
         var grid = new System.Windows.Controls.Grid();
         grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = new System.Windows.GridLength(1, System.Windows.GridUnitType.Star) });
         grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = System.Windows.GridLength.Auto });
-        System.Windows.Controls.Grid.SetRow(scrollViewer, 0);
-        grid.Children.Add(scrollViewer);
+        System.Windows.Controls.Grid.SetRow(contentPanel, 0);
+        grid.Children.Add(contentPanel);
         System.Windows.Controls.Grid.SetRow(bottomBar, 1);
         grid.Children.Add(bottomBar);
 
@@ -496,11 +516,12 @@ public class ShortcutsLibrary : LibraryPlugin
         return (topBar, searchBar, cbOnlyNew, statusText);
     }
 
-    private (System.Windows.Controls.StackPanel, System.Windows.Controls.ScrollViewer) CreateMainContent(System.Windows.Controls.StackPanel topBar)
+    private (System.Windows.Controls.StackPanel, System.Windows.Controls.Grid) CreateMainContent(System.Windows.Controls.StackPanel topBar)
     {
         var contentGrid = new System.Windows.Controls.Grid();
         contentGrid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = System.Windows.GridLength.Auto });
         contentGrid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = new System.Windows.GridLength(1, System.Windows.GridUnitType.Star) });
+        System.Windows.Controls.Grid.SetRow(topBar, 0);
         contentGrid.Children.Add(topBar);
         var listPanel = new System.Windows.Controls.StackPanel { Margin = new System.Windows.Thickness(12, 0, 12, 0) };
         var scroll = new System.Windows.Controls.ScrollViewer
@@ -511,7 +532,7 @@ public class ShortcutsLibrary : LibraryPlugin
         };
         System.Windows.Controls.Grid.SetRow(scroll, 1);
         contentGrid.Children.Add(scroll);
-        return (listPanel, scroll);
+        return (listPanel, contentGrid);
     }
 
     private (System.Windows.Controls.StackPanel, System.Windows.Controls.Button, System.Windows.Controls.Button) CreateBottomBar(string confirmLabel)
@@ -549,6 +570,115 @@ public class ShortcutsLibrary : LibraryPlugin
         updateStatus();
     }
 
+    private Dictionary<string, uint> BuildPlayniteIdLookup()
+    {
+        var byPlayniteId = new Dictionary<string, uint>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            foreach (var kv in Settings.ExportMap)
+            {
+                if (uint.TryParse(kv.Key, out var appId) && !string.IsNullOrEmpty(kv.Value))
+                {
+                    byPlayniteId[kv.Value] = appId;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn(ex, "Failed to build inverted export map.");
+        }
+
+        return byPlayniteId;
+    }
+
+    private SelectionCandidate BuildSelectionCandidate(Game game, Dictionary<uint, SteamShortcut> existingById, Dictionary<string, SteamShortcut> existingByStable, Dictionary<string, uint> byPlayniteId)
+    {
+        if (game == null)
+        {
+            return SelectionCandidate.Empty;
+        }
+
+        try
+        {
+            var actions = game.GameActions?.Where(a => a != null).ToList() ?? new List<GameAction>();
+            var primaryAction = actions.FirstOrDefault(a => a.IsPlayAction) ?? actions.FirstOrDefault();
+            var fileAction = actions.FirstOrDefault(a => a.Type == GameActionType.File && !string.IsNullOrEmpty(a.Path));
+            var hasAction = actions.Any(a => !string.IsNullOrEmpty(a.Path));
+
+            string exePath = string.Empty;
+            if (fileAction != null)
+            {
+                exePath = ExpandPathVariables(game, fileAction.Path) ?? string.Empty;
+                if (string.IsNullOrWhiteSpace(exePath))
+                {
+                    exePath = fileAction.Path ?? string.Empty;
+                }
+            }
+
+            string name = !string.IsNullOrEmpty(game.Name)
+                ? game.Name
+                : (!string.IsNullOrEmpty(exePath)
+                    ? Path.GetFileNameWithoutExtension(exePath) ?? string.Empty
+                    : string.Empty);
+
+            bool exists = false;
+
+            if (game.Id != Guid.Empty && byPlayniteId.TryGetValue(game.Id.ToString(), out var mappedAppId) && mappedAppId != 0)
+            {
+                exists = existingById.ContainsKey(mappedAppId);
+            }
+
+            if (!exists && actions.Count > 0)
+            {
+                foreach (var act in actions)
+                {
+                    if (act?.Type == GameActionType.URL && !string.IsNullOrEmpty(act.Path))
+                    {
+                        var maybeAppId = TryParseAppIdFromRungameUrl(act.Path);
+                        if (maybeAppId != 0)
+                        {
+                            exists = existingById.ContainsKey(maybeAppId);
+                            if (exists)
+                            {
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (!exists && hasAction && !string.IsNullOrEmpty(exePath))
+            {
+                var stableKey = Utils.HashString($"{exePath}|{name}");
+                if (existingByStable.TryGetValue(stableKey, out var match))
+                {
+                    exists = true;
+                }
+            }
+
+            if (!exists && hasAction && !string.IsNullOrEmpty(exePath))
+            {
+                var computed = Utils.GenerateShortcutAppId(exePath, name);
+                exists = existingById.ContainsKey(computed);
+            }
+
+            var displayAction = primaryAction ?? fileAction;
+            var target = displayAction != null
+                ? (displayAction.Type == GameActionType.File
+                    ? (string.IsNullOrEmpty(exePath) ? displayAction.Path ?? string.Empty : exePath)
+                    : displayAction.Path ?? string.Empty)
+                : string.Empty;
+
+            var label = (name + " — " + target) + (exists ? Constants.SteamTag : string.Empty);
+            return new SelectionCandidate(label, hasAction, exists);
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn(ex, $"Failed to build selection candidate for '{game?.Name}'.");
+            return SelectionCandidate.Empty;
+        }
+    }
+
     private void AddGamesToSteam(IEnumerable<Game> games)
     {
         var vdfPath = ResolveShortcutsVdfPath();
@@ -575,21 +705,7 @@ public class ShortcutsLibrary : LibraryPlugin
 
         var shortcuts = File.Exists(vdfPath) ? ShortcutsFile.Read(vdfPath!).ToList() : new List<SteamShortcut>();
         var existing = shortcuts.ToDictionary(s => s.AppId, s => s);
-        var byPlayniteId = new Dictionary<string, uint>(StringComparer.OrdinalIgnoreCase);
-        try
-        {
-            foreach (var kv in Settings.ExportMap)
-            {
-                if (uint.TryParse(kv.Key, out var aid) && !string.IsNullOrEmpty(kv.Value))
-                {
-                    byPlayniteId[kv.Value] = aid;
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            Logger.Warn(ex, "Failed to build inverted export map.");
-        }
+        var byPlayniteId = BuildPlayniteIdLookup();
 
         int added = 0, updated = 0, skipped = 0;
         foreach (var g in games)
@@ -666,6 +782,24 @@ public class ShortcutsLibrary : LibraryPlugin
         }
 
         return (exePath, workDir, name, action);
+    }
+
+    private sealed class SelectionCandidate
+    {
+        public static SelectionCandidate Empty { get; } = new SelectionCandidate(string.Empty, false, false);
+
+        public SelectionCandidate(string label, bool hasPlayableAction, bool existsInSteam)
+        {
+            Label = label;
+            HasPlayableAction = hasPlayableAction;
+            ExistsInSteam = existsInSteam;
+        }
+
+        public string Label { get; }
+        public bool HasPlayableAction { get; }
+        public bool ExistsInSteam { get; }
+        public bool ShouldSelect => HasPlayableAction && !ExistsInSteam;
+        public bool IsNew => ShouldSelect;
     }
 
     private uint CreateOrUpdateShortcut(Game g, string exePath, string? workDir, string name, GameAction action, List<SteamShortcut> shortcuts, Dictionary<uint, SteamShortcut> existing, Dictionary<string, uint> byPlayniteId, ref int added, ref int updated)
@@ -1014,6 +1148,7 @@ public class ShortcutsLibrary : LibraryPlugin
             var shortcuts = ShortcutsFile.Read(vdfPath!);
 
             var metas = new List<GameMetadata>();
+            var detector = new DuplicateDetector(this);
             var seenIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var sc in shortcuts)
             {
@@ -1021,7 +1156,6 @@ public class ShortcutsLibrary : LibraryPlugin
                 if (existing == null)
                 {
                     // Avoid duplicating games that already exist in other libraries
-                    var detector = new DuplicateDetector(this);
                     if (detector.ExistsAnyGameMatch(sc))
                     {
                         continue;

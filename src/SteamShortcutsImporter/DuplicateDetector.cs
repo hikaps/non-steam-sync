@@ -1,13 +1,51 @@
 using Playnite.SDK;
 using Playnite.SDK.Models;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace SteamShortcutsImporter;
 
 internal sealed class DuplicateDetector
 {
     private readonly ShortcutsLibrary lib;
-    public DuplicateDetector(ShortcutsLibrary lib) { this.lib = lib; }
+    private readonly HashSet<string> steamRunGameUrls;
+
+    public DuplicateDetector(ShortcutsLibrary lib)
+    {
+        this.lib = lib;
+        steamRunGameUrls = BuildRunGameIndex();
+    }
+
+    private HashSet<string> BuildRunGameIndex()
+    {
+        var urls = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            foreach (var game in lib.PlayniteApi.Database.Games)
+            {
+                var acts = game?.GameActions;
+                if (acts == null) continue;
+                foreach (var act in acts)
+                {
+                    if (act?.Type == GameActionType.URL && !string.IsNullOrEmpty(act.Path))
+                    {
+                        var path = act.Path.Trim();
+                        if (path.StartsWith(Constants.SteamRungameIdUrl, StringComparison.OrdinalIgnoreCase))
+                        {
+                            urls.Add(path);
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            LogManager.GetLogger().Warn(ex, "Failed to build Steam rungame index.");
+        }
+
+        return urls;
+    }
 
     public bool ExistsAnyGameMatch(SteamShortcut sc)
     {
@@ -65,6 +103,11 @@ internal sealed class DuplicateDetector
             if (appId != 0)
             {
                 var expectedUrl = DuplicateUtils.ExpectedRungameUrl(appId);
+                if (!string.IsNullOrEmpty(expectedUrl) && steamRunGameUrls.Contains(expectedUrl))
+                {
+                    return true;
+                }
+
                 foreach (var g in lib.PlayniteApi.Database.Games.Where(x => string.Equals(x.Name, sc.AppName, StringComparison.OrdinalIgnoreCase)))
                 {
                     var act = g.GameActions?.FirstOrDefault(a => a.IsPlayAction) ?? g.GameActions?.FirstOrDefault();
