@@ -330,12 +330,6 @@ public class ShortcutsLibrary : LibraryPlugin
         return newGames.Count;
     }
 
-    private bool ExistsAnyGameMatch(SteamShortcut sc)
-    {
-        var detector = new DuplicateDetector(this);
-        return detector.ExistsAnyGameMatch(sc);
-    }
-
     private void ShowAddToSteamDialog()
     {
         var vdfPath = ResolveShortcutsVdfPath();
@@ -628,11 +622,9 @@ public class ShortcutsLibrary : LibraryPlugin
                     : string.Empty);
 
             bool exists = false;
-            uint resolvedAppId = 0;
 
             if (game.Id != Guid.Empty && byPlayniteId.TryGetValue(game.Id.ToString(), out var mappedAppId) && mappedAppId != 0)
             {
-                resolvedAppId = mappedAppId;
                 exists = existingById.ContainsKey(mappedAppId);
             }
 
@@ -645,7 +637,6 @@ public class ShortcutsLibrary : LibraryPlugin
                         var maybeAppId = TryParseAppIdFromRungameUrl(act.Path);
                         if (maybeAppId != 0)
                         {
-                            resolvedAppId = maybeAppId;
                             exists = existingById.ContainsKey(maybeAppId);
                             if (exists)
                             {
@@ -661,7 +652,6 @@ public class ShortcutsLibrary : LibraryPlugin
                 var stableKey = Utils.HashString($"{exePath}|{name}");
                 if (existingByStable.TryGetValue(stableKey, out var match))
                 {
-                    resolvedAppId = match.AppId;
                     exists = true;
                 }
             }
@@ -669,7 +659,6 @@ public class ShortcutsLibrary : LibraryPlugin
             if (!exists && hasAction && !string.IsNullOrEmpty(exePath))
             {
                 var computed = Utils.GenerateShortcutAppId(exePath, name);
-                resolvedAppId = computed;
                 exists = existingById.ContainsKey(computed);
             }
 
@@ -810,7 +799,7 @@ public class ShortcutsLibrary : LibraryPlugin
         public bool HasPlayableAction { get; }
         public bool ExistsInSteam { get; }
         public bool ShouldSelect => HasPlayableAction && !ExistsInSteam;
-        public bool IsNew => HasPlayableAction && !ExistsInSteam;
+        public bool IsNew => ShouldSelect;
     }
 
     private uint CreateOrUpdateShortcut(Game g, string exePath, string? workDir, string name, GameAction action, List<SteamShortcut> shortcuts, Dictionary<uint, SteamShortcut> existing, Dictionary<string, uint> byPlayniteId, ref int added, ref int updated)
@@ -1159,6 +1148,7 @@ public class ShortcutsLibrary : LibraryPlugin
             var shortcuts = ShortcutsFile.Read(vdfPath!);
 
             var metas = new List<GameMetadata>();
+            var detector = new DuplicateDetector(this);
             var seenIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var sc in shortcuts)
             {
@@ -1166,7 +1156,6 @@ public class ShortcutsLibrary : LibraryPlugin
                 if (existing == null)
                 {
                     // Avoid duplicating games that already exist in other libraries
-                    var detector = new DuplicateDetector(this);
                     if (detector.ExistsAnyGameMatch(sc))
                     {
                         continue;
