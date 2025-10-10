@@ -413,14 +413,14 @@ public class ShortcutsLibrary : LibraryPlugin
     {
         var window = CreateSelectionWindow(title);
         var (topBar, searchBar, cbOnlyNew, statusText) = CreateTopBar();
-        var (listPanel, scrollViewer) = CreateMainContent(topBar);
+        var (listPanel, contentPanel) = CreateMainContent(topBar);
         var (bottomBar, btnConfirm, btnCancel) = CreateBottomBar(confirmLabel);
 
         var grid = new System.Windows.Controls.Grid();
         grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = new System.Windows.GridLength(1, System.Windows.GridUnitType.Star) });
         grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = System.Windows.GridLength.Auto });
-        System.Windows.Controls.Grid.SetRow(scrollViewer, 0);
-        grid.Children.Add(scrollViewer);
+        System.Windows.Controls.Grid.SetRow(contentPanel, 0);
+        grid.Children.Add(contentPanel);
         System.Windows.Controls.Grid.SetRow(bottomBar, 1);
         grid.Children.Add(bottomBar);
 
@@ -496,11 +496,12 @@ public class ShortcutsLibrary : LibraryPlugin
         return (topBar, searchBar, cbOnlyNew, statusText);
     }
 
-    private (System.Windows.Controls.StackPanel, System.Windows.Controls.ScrollViewer) CreateMainContent(System.Windows.Controls.StackPanel topBar)
+    private (System.Windows.Controls.StackPanel, System.Windows.Controls.Grid) CreateMainContent(System.Windows.Controls.StackPanel topBar)
     {
         var contentGrid = new System.Windows.Controls.Grid();
         contentGrid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = System.Windows.GridLength.Auto });
         contentGrid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = new System.Windows.GridLength(1, System.Windows.GridUnitType.Star) });
+        System.Windows.Controls.Grid.SetRow(topBar, 0);
         contentGrid.Children.Add(topBar);
         var listPanel = new System.Windows.Controls.StackPanel { Margin = new System.Windows.Thickness(12, 0, 12, 0) };
         var scroll = new System.Windows.Controls.ScrollViewer
@@ -511,7 +512,7 @@ public class ShortcutsLibrary : LibraryPlugin
         };
         System.Windows.Controls.Grid.SetRow(scroll, 1);
         contentGrid.Children.Add(scroll);
-        return (listPanel, scroll);
+        return (listPanel, contentGrid);
     }
 
     private (System.Windows.Controls.StackPanel, System.Windows.Controls.Button, System.Windows.Controls.Button) CreateBottomBar(string confirmLabel)
