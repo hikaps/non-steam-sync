@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Windows.Media;
 
 namespace SteamShortcutsImporter;
@@ -16,6 +17,12 @@ public class ShortcutsLibrary : LibraryPlugin
 
     public readonly PluginSettings Settings;
     private readonly Guid pluginId = Guid.Parse(Constants.PluginId);
+    
+    // Debouncing for Games_ItemUpdated to prevent race conditions
+    private Timer? _updateDebounceTimer;
+    private readonly object _updateLock = new object();
+    private bool _hasPendingUpdates = false;
+    private const int UpdateDebounceMs = 2000; // 2 second delay after last update
 
     public ShortcutsLibrary(IPlayniteAPI api) : base(api)
     {
@@ -42,6 +49,15 @@ public class ShortcutsLibrary : LibraryPlugin
         {
             Logger.Error(ex, "Failed to attach Games.ItemUpdated handler.");
         }
+    }
+
+    public override void Dispose()
+    {
+        // Clean up debounce timer
+        _updateDebounceTimer?.Dispose();
+        _updateDebounceTimer = null;
+        
+        base.Dispose();
     }
 
     public override Guid Id => pluginId;
@@ -1379,7 +1395,31 @@ public class ShortcutsLibrary : LibraryPlugin
 
     private void Games_ItemUpdated(object sender, ItemUpdatedEventArgs<Game> e)
     {
-        // Persist changes from Playnite back to shortcuts.vdf for this library's games
+        // Debounce updates to prevent race conditions when multiple games change rapidly
+        // This queues a write operation that executes after UpdateDebounceMs of idle time
+        lock (_updateLock)
+        {
+            _hasPendingUpdates = true;
+            
+            // Reset timer - this delays execution until UpdateDebounceMs after the LAST update
+            _updateDebounceTimer?.Dispose();
+            _updateDebounceTimer = new Timer(_ => ProcessPendingGameUpdates(), null, UpdateDebounceMs, Timeout.Infinite);
+        }
+    }
+    
+    private void ProcessPendingGameUpdates()
+    {
+        lock (_updateLock)
+        {
+            if (!_hasPendingUpdates)
+            {
+                return;
+            }
+            
+            _hasPendingUpdates = false;
+        }
+        
+        // Persist all pending changes from Playnite back to shortcuts.vdf
         try
         {
             var vdfPath = ResolveShortcutsVdfPath();
@@ -1393,14 +1433,10 @@ public class ShortcutsLibrary : LibraryPlugin
             var byApp = shortcuts.ToDictionary(s => s.AppId.ToString(), s => s, StringComparer.OrdinalIgnoreCase);
             bool changed = false;
 
-            foreach (var upd in e.UpdatedItems)
+            // Check all games from this library and sync any that changed
+            var ourGames = PlayniteApi.Database.Games.Where(g => g.PluginId == Id).ToList();
+            foreach (var game in ourGames)
             {
-                var game = upd.NewData;
-                if (game.PluginId != Id)
-                {
-                    continue;
-                }
-
                 SteamShortcut? sc = null;
                 var gid = game.GameId ?? string.Empty;
                 if (!string.IsNullOrEmpty(gid))
@@ -1423,12 +1459,13 @@ public class ShortcutsLibrary : LibraryPlugin
 
             if (changed)
             {
+                Logger.Info($"Writing debounced updates to shortcuts.vdf for {ourGames.Count} game(s).");
                 WriteShortcutsWithBackup(vdfPath!, shortcuts);
             }
         }
         catch (Exception ex)
         {
-            Logger.Error(ex, "Failed to sync back to shortcuts.vdf");
+            Logger.Error(ex, "Failed to process pending game updates to shortcuts.vdf");
         }
     }
 
