@@ -21,7 +21,8 @@ public class SteamShortcut
     public List<string>? Tags { get; set; }
 
     // A stable id derived from exe + app name similar to Steam's appid seed.
-    public string StableId => Utils.HashString($"{Exe}|{AppName}");
+    // Paths are normalized (unquoted) to ensure consistency.
+    public string StableId => Utils.HashString($"{Utils.NormalizePath(Exe)}|{AppName?.Trim() ?? string.Empty}");
 }
 
 public static class ShortcutsFile

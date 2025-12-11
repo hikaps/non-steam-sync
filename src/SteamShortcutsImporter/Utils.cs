@@ -5,6 +5,28 @@ namespace SteamShortcutsImporter;
 
 internal static class Utils
 {
+    /// <summary>
+    /// Normalizes a path by removing surrounding quotes and trimming whitespace.
+    /// Used to ensure consistent path representation before hashing or comparison.
+    /// </summary>
+    public static string NormalizePath(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return string.Empty;
+        }
+        
+        var trimmed = path.Trim();
+        
+        // Remove surrounding quotes
+        if (trimmed.Length >= 2 && trimmed[0] == '"' && trimmed[trimmed.Length - 1] == '"')
+        {
+            return trimmed.Substring(1, trimmed.Length - 2);
+        }
+        
+        return trimmed;
+    }
+
     public static string HashString(string input)
     {
         unchecked
@@ -40,7 +62,10 @@ internal static class Utils
     public static uint GenerateShortcutAppId(string exe, string appName)
     {
         // Common approach used by community tools; Steam ORs with 0x80000000 for shortcuts
-        var seed = (exe ?? string.Empty) + (appName ?? string.Empty);
+        // Normalize paths to ensure consistent AppId generation regardless of quoting
+        var normalizedExe = NormalizePath(exe);
+        var normalizedName = (appName ?? string.Empty).Trim();
+        var seed = normalizedExe + normalizedName;
         var crc = Crc32(Encoding.UTF8.GetBytes(seed));
         return crc | 0x80000000u;
     }
