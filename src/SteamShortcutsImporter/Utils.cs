@@ -16,7 +16,8 @@ internal static class Utils
             return string.Empty;
         }
         
-        var trimmed = path.Trim();
+        // path is guaranteed non-null after IsNullOrWhiteSpace check
+        var trimmed = path!.Trim();
         
         // Remove surrounding quotes
         if (trimmed.Length >= 2 && trimmed[0] == '"' && trimmed[trimmed.Length - 1] == '"')

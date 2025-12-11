@@ -1476,6 +1476,25 @@ public class ShortcutsLibrary : LibraryPlugin
 
     private void WriteShortcutsWithBackup(string vdfPath, List<SteamShortcut> shortcuts)
     {
+        // Check if Steam is running and warn user
+        if (SteamProcessHelper.IsSteamRunning())
+        {
+            var result = PlayniteApi.Dialogs.ShowMessage(
+                SteamProcessHelper.GetSteamRunningWarning(),
+                Name,
+                System.Windows.MessageBoxButton.YesNo,
+                System.Windows.MessageBoxImage.Warning
+            );
+            
+            if (result == System.Windows.MessageBoxResult.No)
+            {
+                Logger.Info("User cancelled VDF write due to Steam running.");
+                return;
+            }
+            
+            Logger.Warn("User proceeded with VDF write despite Steam running.");
+        }
+
         try
         {
             CreateManagedBackup(vdfPath, Constants.ShortcutsKind);
