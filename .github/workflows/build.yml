@@ -4,8 +4,10 @@ on:
   push:
     branches:
       - main
+      - develop
       - 'feature/**'
       - 'fix/**'
+      - 'refactor/**'
   pull_request:
     branches: [ main ]
 
