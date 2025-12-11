@@ -17,6 +17,7 @@ public class ShortcutsLibrary : LibraryPlugin
 
     public readonly PluginSettings Settings;
     private readonly Guid pluginId = Guid.Parse(Constants.PluginId);
+    private readonly ArtworkManager _artworkManager;
     
     // Debouncing for Games_ItemUpdated to prevent race conditions
     private Timer? _updateDebounceTimer;
@@ -27,6 +28,7 @@ public class ShortcutsLibrary : LibraryPlugin
     public ShortcutsLibrary(IPlayniteAPI api) : base(api)
     {
         Instance = this;
+        _artworkManager = new ArtworkManager(api);
         try
         {
             Settings = new PluginSettings(this);
@@ -213,7 +215,7 @@ public class ShortcutsLibrary : LibraryPlugin
                         string? grid = null;
                         if (!string.IsNullOrEmpty(vdf))
                         {
-                            grid = TryGetGridDirFromVdf(vdf!);
+                            grid = _artworkManager.TryGetGridDirFromVdf(vdf!);
                         }
                         if (!string.IsNullOrEmpty(grid) && Directory.Exists(grid))
                         {
@@ -246,7 +248,7 @@ public class ShortcutsLibrary : LibraryPlugin
         {
             var shortcuts = ShortcutsFile.Read(vdfPath!).ToList();
             var detector = new DuplicateDetector(this);
-            var gridDir = TryGetGridDirFromVdf(vdfPath!);
+            var gridDir = _artworkManager.TryGetGridDirFromVdf(vdfPath!);
 
             ShowSelectionDialog(
                 title: Constants.ImportDialogTitle,
@@ -258,7 +260,7 @@ public class ShortcutsLibrary : LibraryPlugin
                     var baseText = $"{sc.AppName} — {target}";
                     return existsAny ? baseText + Constants.PlayniteTag : baseText;
                 },
-                previewImage: sc => TryPickGridPreview(sc.AppId, gridDir),
+                previewImage: sc => _artworkManager.TryPickGridPreview(sc.AppId, gridDir),
                 isInitiallyChecked: sc =>
                 {
                     var existsAny = detector.ExistsAnyGameMatch(sc);
@@ -325,7 +327,7 @@ public class ShortcutsLibrary : LibraryPlugin
             PlayniteApi.Database.Games.Add(newGames);
             try
             {
-                var gridDir = TryGetGridDirFromVdf(vdfPath);
+                var gridDir = _artworkManager.TryGetGridDirFromVdf(vdfPath);
                 if (!string.IsNullOrEmpty(gridDir) && Directory.Exists(gridDir))
                 {
                     foreach (var g in newGames)
@@ -333,7 +335,7 @@ public class ShortcutsLibrary : LibraryPlugin
                         var sc = shortcuts.FirstOrDefault(s => s.StableId == g.GameId || s.AppId.ToString() == g.GameId);
                         if (sc != null)
                         {
-                            TryImportArtworkFromGrid(g, sc.AppId, gridDir!);
+                            _artworkManager.TryImportArtworkFromGrid(g, sc.AppId, gridDir!);
                         }
                     }
                 }
@@ -412,7 +414,7 @@ public class ShortcutsLibrary : LibraryPlugin
                         ? $"{g?.Name ?? string.Empty} — "
                         : candidate.Label;
                 },
-                previewImage: g => TryPickPlaynitePreview(g),
+                previewImage: g => _artworkManager.TryPickPlaynitePreview(g),
                 isInitiallyChecked: g =>
                 {
                     var candidate = GetCandidate(g);
@@ -878,11 +880,11 @@ public class ShortcutsLibrary : LibraryPlugin
     {
         try
         {
-            var gridDir = TryGetGridDirFromVdf(vdfPath);
+            var gridDir = _artworkManager.TryGetGridDirFromVdf(vdfPath);
             if (!string.IsNullOrEmpty(gridDir))
             {
-                TryExportArtworkToGrid(g, appId, gridDir);
-                var iconPath = TryGetGridIconPath(appId, gridDir);
+                _artworkManager.TryExportArtworkToGrid(g, appId, gridDir);
+                var iconPath = _artworkManager.TryGetGridIconPath(appId, gridDir);
                 if (!string.IsNullOrEmpty(iconPath))
                 {
                     var sc = ShortcutsFile.Read(vdfPath).FirstOrDefault(s => s.AppId == appId);
@@ -912,36 +914,9 @@ public class ShortcutsLibrary : LibraryPlugin
         }
     }
 
-    private static string? TryGetGridDirFromVdf(string vdfPath)
-    {
-        try
-        {
-            var cfgDir = Path.GetDirectoryName(vdfPath);
-            if (string.IsNullOrEmpty(cfgDir)) return null;
-            var grid = Path.Combine(cfgDir, "grid");
-            return grid;
-        }
-        catch (Exception ex)
-        {
-            Logger.Warn(ex, "Failed to get grid dir from vdf.");
-            return null;
-        }
-    }
+    
 
-    private static string? TryGetGridIconPath(uint appId, string? gridDir)
-    {
-        try
-        {
-            if (appId == 0 || string.IsNullOrEmpty(gridDir) || !Directory.Exists(gridDir)) return null;
-            var matches = Directory.GetFiles(gridDir, appId + "_icon.*", SearchOption.TopDirectoryOnly);
-            return matches.FirstOrDefault();
-        }
-        catch (Exception ex)
-        {
-            Logger.Warn(ex, "Failed to get grid icon path.");
-            return null;
-        }
-    }
+    
 
     private static uint TryParseAppIdFromRungameUrl(string? url)
     {
@@ -989,44 +964,7 @@ public class ShortcutsLibrary : LibraryPlugin
         }
     }
 
-    private void TryExportArtworkToGrid(Game game, uint appId, string? gridDir)
-    {
-        if (appId == 0 || string.IsNullOrEmpty(gridDir)) return;
-        try
-        {
-            Directory.CreateDirectory(gridDir);
-
-            void CopyIfExists(string dbPath, string targetNameBase)
-            {
-                if (string.IsNullOrEmpty(dbPath)) return;
-                var src = PlayniteApi.Database.GetFullFilePath(dbPath);
-                if (string.IsNullOrEmpty(src) || !File.Exists(src)) return;
-                var ext = Path.GetExtension(src);
-                var dst = Path.Combine(gridDir!, targetNameBase + ext);
-                File.Copy(src, dst, overwrite: true);
-            }
-
-            if (!string.IsNullOrEmpty(game.CoverImage))
-            {
-                CopyIfExists(game.CoverImage, appId.ToString());
-                CopyIfExists(game.CoverImage, appId + "p");
-            }
-
-            if (!string.IsNullOrEmpty(game.Icon))
-            {
-                CopyIfExists(game.Icon, appId + "_icon");
-            }
-
-            if (!string.IsNullOrEmpty(game.BackgroundImage))
-            {
-                CopyIfExists(game.BackgroundImage, appId + "_hero");
-            }
-        }
-        catch (Exception ex)
-        {
-            Logger.Warn(ex, $"Failed exporting artwork to grid for appId={appId}");
-        }
-    }
+    
 
     private object BuildListItemWithPreview(string text, string? imagePath)
     {
@@ -1068,49 +1006,9 @@ public class ShortcutsLibrary : LibraryPlugin
         return grid;
     }
 
-    private string? TryPickGridPreview(uint appId, string? gridDir)
-    {
-        try
-        {
-            if (appId == 0 || string.IsNullOrEmpty(gridDir) || !Directory.Exists(gridDir)) return null;
-            string[] hero = Directory.GetFiles(gridDir, appId + "_hero.*", SearchOption.TopDirectoryOnly);
-            string[] poster = Directory.GetFiles(gridDir, appId + "p.*", SearchOption.TopDirectoryOnly);
-            string[] cover = Directory.GetFiles(gridDir, appId + ".*", SearchOption.TopDirectoryOnly);
-            string[] icon = Directory.GetFiles(gridDir, appId + "_icon.*", SearchOption.TopDirectoryOnly);
-            return hero.FirstOrDefault() ?? poster.FirstOrDefault() ?? cover.FirstOrDefault() ?? icon.FirstOrDefault();
-        }
-        catch (Exception ex)
-        {
-            Logger.Warn(ex, "Failed to pick grid preview.");
-            return null;
-        }
-    }
+    
 
-    private string? TryPickPlaynitePreview(Game game)
-    {
-        try
-        {
-            string? path = null;
-            if (!string.IsNullOrEmpty(game.CoverImage))
-            {
-                path = PlayniteApi.Database.GetFullFilePath(game.CoverImage);
-            }
-            if (string.IsNullOrEmpty(path) && !string.IsNullOrEmpty(game.Icon))
-            {
-                path = PlayniteApi.Database.GetFullFilePath(game.Icon);
-            }
-            if (string.IsNullOrEmpty(path) && !string.IsNullOrEmpty(game.BackgroundImage))
-            {
-                path = PlayniteApi.Database.GetFullFilePath(game.BackgroundImage);
-            }
-            return File.Exists(path ?? string.Empty) ? path : null;
-        }
-        catch (Exception ex)
-        {
-            Logger.Warn(ex, "Failed to pick playnite preview.");
-            return null;
-        }
-    }
+    
 
     private static bool LooksLikeUrl(string? s)
     {
@@ -1121,34 +1019,7 @@ public class ShortcutsLibrary : LibraryPlugin
             || val.StartsWith("steam://", StringComparison.OrdinalIgnoreCase);
     }
 
-    private void TryImportArtworkFromGrid(Game game, uint appId, string gridDir)
-    {
-        try
-        {
-            if (appId == 0 || !Directory.Exists(gridDir)) return;
-
-            string[] hero = Directory.GetFiles(gridDir, appId + "_hero.*", SearchOption.TopDirectoryOnly);
-            string[] icon = Directory.GetFiles(gridDir, appId + "_icon.*", SearchOption.TopDirectoryOnly);
-            string[] cover = Directory.GetFiles(gridDir, appId + ".*", SearchOption.TopDirectoryOnly);
-            string[] poster = Directory.GetFiles(gridDir, appId + "p.*", SearchOption.TopDirectoryOnly);
-
-            string? Pick(string[] arr) => arr.FirstOrDefault();
-
-            var bg = Pick(hero);
-            var ic = Pick(icon);
-            var cv = Pick(poster.Length > 0 ? poster : cover);
-
-            if (!string.IsNullOrEmpty(bg)) game.BackgroundImage = PlayniteApi.Database.AddFile(bg, game.Id);
-            if (!string.IsNullOrEmpty(ic)) game.Icon = PlayniteApi.Database.AddFile(ic, game.Id);
-            if (!string.IsNullOrEmpty(cv)) game.CoverImage = PlayniteApi.Database.AddFile(cv, game.Id);
-
-            PlayniteApi.Database.Games.Update(game);
-        }
-        catch (Exception ex)
-        {
-            Logger.Warn(ex, $"Failed importing artwork from grid for appId={appId}");
-        }
-    }
+    
     public override IEnumerable<GameMetadata> GetGames(LibraryGetGamesArgs args)
     {
         var vdfPath = ResolveShortcutsVdfPath();
@@ -1502,9 +1373,9 @@ public class ShortcutsLibrary : LibraryPlugin
     private void UpdateShortcutArtworkFromGame(Game game, SteamShortcut sc, string vdfPath)
     {
         // Export updated artwork to grid and update icon path
-        var gridDir = TryGetGridDirFromVdf(vdfPath);
-        TryExportArtworkToGrid(game, sc.AppId, gridDir);
-        var iconPath = TryGetGridIconPath(sc.AppId, gridDir);
+        var gridDir = _artworkManager.TryGetGridDirFromVdf(vdfPath);
+        _artworkManager.TryExportArtworkToGrid(game, sc.AppId, gridDir);
+        var iconPath = _artworkManager.TryGetGridIconPath(sc.AppId, gridDir);
         if (!string.IsNullOrEmpty(iconPath))
         {
             sc.Icon = iconPath!;
