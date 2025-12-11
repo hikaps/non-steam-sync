@@ -9,11 +9,13 @@ namespace SteamShortcutsImporter;
 internal sealed class DuplicateDetector
 {
     private readonly ShortcutsLibrary lib;
+    private readonly SteamPathResolver pathResolver;
     private readonly HashSet<string> steamRunGameUrls;
 
-    public DuplicateDetector(ShortcutsLibrary lib)
+    public DuplicateDetector(ShortcutsLibrary lib, SteamPathResolver pathResolver)
     {
         this.lib = lib;
+        this.pathResolver = pathResolver;
         steamRunGameUrls = BuildRunGameIndex();
     }
 
@@ -88,7 +90,7 @@ internal sealed class DuplicateDetector
                     var act = g.GameActions?.FirstOrDefault(a => a.IsPlayAction) ?? g.GameActions?.FirstOrDefault();
                     if (act?.Type == GameActionType.File && !string.IsNullOrEmpty(act.Path))
                     {
-                        var exe = lib.ExpandPathVariables(g, act.Path) ?? string.Empty;
+                        var exe = pathResolver.ExpandPathVariables(g, act.Path) ?? string.Empty;
                         var exeNorm = DuplicateUtils.NormalizePath(exe);
                         if (string.Equals(exeNorm, scExeNorm, StringComparison.OrdinalIgnoreCase))
                         {

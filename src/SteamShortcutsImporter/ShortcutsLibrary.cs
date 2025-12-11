@@ -18,6 +18,7 @@ public class ShortcutsLibrary : LibraryPlugin
     public readonly PluginSettings Settings;
     private readonly Guid pluginId = Guid.Parse(Constants.PluginId);
     private readonly ArtworkManager _artworkManager;
+    private SteamPathResolver _pathResolver;
     
     // Debouncing for Games_ItemUpdated to prevent race conditions
     private Timer? _updateDebounceTimer;
@@ -32,11 +33,13 @@ public class ShortcutsLibrary : LibraryPlugin
         try
         {
             Settings = new PluginSettings(this);
+            _pathResolver = new SteamPathResolver(Settings.SteamRootPath);
         }
         catch (Exception ex)
         {
             Logger.Error(ex, "Failed to initialize plugin settings.");
             Settings = new PluginSettings(this) { SteamRootPath = string.Empty };
+            _pathResolver = new SteamPathResolver(Settings.SteamRootPath);
         }
 
         try
@@ -189,7 +192,7 @@ public class ShortcutsLibrary : LibraryPlugin
                         string exe = string.Empty;
                         if (act?.Type == GameActionType.File && !string.IsNullOrEmpty(act.Path))
                         {
-                            exe = ExpandPathVariables(g, act.Path) ?? string.Empty;
+                            exe = _pathResolver.ExpandPathVariables(g, act.Path) ?? string.Empty;
                         }
                         var appId = Utils.GenerateShortcutAppId(exe, g.Name);
                         var url = $"{Constants.SteamRungameIdUrl}{Utils.ToShortcutGameId(appId)}";
@@ -211,7 +214,7 @@ public class ShortcutsLibrary : LibraryPlugin
                 {
                     try
                     {
-                        var vdf = ResolveShortcutsVdfPath();
+                        var vdf = _pathResolver.ResolveShortcutsVdfPath();
                         string? grid = null;
                         if (!string.IsNullOrEmpty(vdf))
                         {
@@ -238,7 +241,7 @@ public class ShortcutsLibrary : LibraryPlugin
 
     private void ShowImportDialog()
     {
-        var vdfPath = ResolveShortcutsVdfPath();
+        var vdfPath = _pathResolver.ResolveShortcutsVdfPath();
         if (string.IsNullOrWhiteSpace(vdfPath) || !File.Exists(vdfPath))
         {
             PlayniteApi.Dialogs.ShowErrorMessage(Constants.SteamPathRequiredMessage, Name);
@@ -247,7 +250,7 @@ public class ShortcutsLibrary : LibraryPlugin
         try
         {
             var shortcuts = ShortcutsFile.Read(vdfPath!).ToList();
-            var detector = new DuplicateDetector(this);
+            var detector = new DuplicateDetector(this, _pathResolver);
             var gridDir = _artworkManager.TryGetGridDirFromVdf(vdfPath!);
 
             ShowSelectionDialog(
@@ -295,7 +298,7 @@ public class ShortcutsLibrary : LibraryPlugin
             .ToDictionary(g => g.GameId, g => g, StringComparer.OrdinalIgnoreCase);
 
         var newGames = new List<Game>();
-        var detector = new DuplicateDetector(this);
+        var detector = new DuplicateDetector(this, _pathResolver);
         skipped = 0;
         foreach (var sc in shortcuts)
         {
@@ -350,7 +353,7 @@ public class ShortcutsLibrary : LibraryPlugin
 
     private void ShowAddToSteamDialog()
     {
-        var vdfPath = ResolveShortcutsVdfPath();
+        var vdfPath = _pathResolver.ResolveShortcutsVdfPath();
         if (string.IsNullOrWhiteSpace(vdfPath))
         {
             PlayniteApi.Dialogs.ShowErrorMessage(Constants.SteamPathRequiredMessage, Name);
@@ -626,7 +629,7 @@ public class ShortcutsLibrary : LibraryPlugin
             string exePath = string.Empty;
             if (fileAction != null)
             {
-                exePath = ExpandPathVariables(game, fileAction.Path) ?? string.Empty;
+                exePath = _pathResolver.ExpandPathVariables(game, fileAction.Path) ?? string.Empty;
                 if (string.IsNullOrWhiteSpace(exePath))
                 {
                     exePath = fileAction.Path ?? string.Empty;
@@ -652,7 +655,7 @@ public class ShortcutsLibrary : LibraryPlugin
                 {
                     if (act?.Type == GameActionType.URL && !string.IsNullOrEmpty(act.Path))
                     {
-                        var maybeAppId = TryParseAppIdFromRungameUrl(act.Path);
+                        var maybeAppId = SteamPathResolver.TryParseAppIdFromRungameUrl(act.Path);
                         if (maybeAppId != 0)
                         {
                             exists = existingById.ContainsKey(maybeAppId);
@@ -699,7 +702,7 @@ public class ShortcutsLibrary : LibraryPlugin
 
     private void AddGamesToSteam(IEnumerable<Game> games)
     {
-        var vdfPath = ResolveShortcutsVdfPath();
+        var vdfPath = _pathResolver.ResolveShortcutsVdfPath();
         if (string.IsNullOrWhiteSpace(vdfPath))
         {
             PlayniteApi.Dialogs.ShowErrorMessage(Constants.SteamPathRequiredMessage, Name);
@@ -715,7 +718,7 @@ public class ShortcutsLibrary : LibraryPlugin
 
     private ExportResult AddGamesToSteamCore(IEnumerable<Game> games)
     {
-        var vdfPath = ResolveShortcutsVdfPath();
+        var vdfPath = _pathResolver.ResolveShortcutsVdfPath();
         if (string.IsNullOrWhiteSpace(vdfPath))
         {
             return new ExportResult();
@@ -764,7 +767,7 @@ public class ShortcutsLibrary : LibraryPlugin
         }
         else if (action.Type == GameActionType.URL)
         {
-            var maybeAppId = TryParseAppIdFromRungameUrl(action.Path);
+            var maybeAppId = SteamPathResolver.TryParseAppIdFromRungameUrl(action.Path);
             if (maybeAppId != 0)
             {
                 resolvedExistingAppId = maybeAppId;
@@ -773,8 +776,8 @@ public class ShortcutsLibrary : LibraryPlugin
 
         if (action.Type == GameActionType.File)
         {
-            exePath = ExpandPathVariables(g, action.Path) ?? string.Empty;
-            workDir = ExpandPathVariables(g, action.WorkingDir);
+            exePath = _pathResolver.ExpandPathVariables(g, action.Path) ?? string.Empty;
+            workDir = _pathResolver.ExpandPathVariables(g, action.WorkingDir);
             if (string.IsNullOrWhiteSpace(workDir) && !string.IsNullOrWhiteSpace(exePath))
             {
                 try { workDir = Path.GetDirectoryName(exePath); } catch (Exception ex) { Logger.Warn(ex, "Failed to get directory name from path."); workDir = null; }
@@ -829,7 +832,7 @@ public class ShortcutsLibrary : LibraryPlugin
         }
         else if (action.Type == GameActionType.URL)
         {
-            var maybeAppId = TryParseAppIdFromRungameUrl(action.Path);
+            var maybeAppId = SteamPathResolver.TryParseAppIdFromRungameUrl(action.Path);
             if (maybeAppId != 0)
             {
                 resolvedExistingAppId = maybeAppId;
@@ -857,7 +860,7 @@ public class ShortcutsLibrary : LibraryPlugin
         }
         else if (action.Type == GameActionType.File)
         {
-            sc.LaunchOptions = ExpandPathVariables(g, action.Arguments) ?? string.Empty;
+            sc.LaunchOptions = _pathResolver.ExpandPathVariables(g, action.Arguments) ?? string.Empty;
         }
 
         try
@@ -905,7 +908,7 @@ public class ShortcutsLibrary : LibraryPlugin
     {
         try
         {
-            EnsureFileActionForExternalGame(g, exePath, workDir, action.Type == GameActionType.File ? ExpandPathVariables(g, action.Arguments) : null);
+            EnsureFileActionForExternalGame(g, exePath, workDir, action.Type == GameActionType.File ? _pathResolver.ExpandPathVariables(g, action.Arguments) : null);
             if (Settings.LaunchViaSteam && appId != 0) { EnsureSteamPlayActionForExternalGame(g, appId); }
         }
         catch (Exception ex)
@@ -918,51 +921,7 @@ public class ShortcutsLibrary : LibraryPlugin
 
     
 
-    private static uint TryParseAppIdFromRungameUrl(string? url)
-    {
-        try
-        {
-            if (string.IsNullOrWhiteSpace(url)) return 0;
-            var val = url!.Trim();
-            const string prefix = "steam://rungameid/";
-            if (!val.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) return 0;
-            var idStr = val.Substring(prefix.Length);
-            if (!ulong.TryParse(idStr, out var gid)) return 0;
-            // appId is upper 32 bits of game id for shortcuts
-            return (uint)(gid >> 32);
-        }
-        catch (Exception ex)
-        {
-            Logger.Warn(ex, "Failed to parse app id from rungame url.");
-            return 0;
-        }
-    }
 
-    public string? ExpandPathVariables(Game game, string? input)
-    {
-        if (string.IsNullOrWhiteSpace(input)) return input;
-        try
-        {
-            var result = input ?? string.Empty;
-            if (!string.IsNullOrEmpty(game.InstallDirectory))
-            {
-                result = result.Replace("{InstallDir}", game.InstallDirectory);
-            }
-            result = Environment.ExpandEnvironmentVariables(result);
-
-            var unquoted = result.Trim('"');
-            if (!Path.IsPathRooted(unquoted) && !string.IsNullOrEmpty(game.InstallDirectory))
-            {
-                try { unquoted = Path.GetFullPath(Path.Combine(game.InstallDirectory, unquoted)); } catch (Exception ex) { Logger.Warn(ex, "Failed to get full path."); }
-            }
-            return unquoted;
-        }
-        catch (Exception ex)
-        {
-            Logger.Warn(ex, "Failed to expand path variables.");
-            return input;
-        }
-    }
 
     
 
@@ -1022,7 +981,7 @@ public class ShortcutsLibrary : LibraryPlugin
     
     public override IEnumerable<GameMetadata> GetGames(LibraryGetGamesArgs args)
     {
-        var vdfPath = ResolveShortcutsVdfPath();
+        var vdfPath = _pathResolver.ResolveShortcutsVdfPath();
         if (string.IsNullOrWhiteSpace(vdfPath) || !File.Exists(vdfPath))
         {
             Logger.Warn($"shortcuts.vdf not found. SteamRootPath= '{Settings.SteamRootPath}' ResolvedVdf= '{vdfPath}'");
@@ -1035,7 +994,7 @@ public class ShortcutsLibrary : LibraryPlugin
             var shortcuts = ShortcutsFile.Read(vdfPath!);
 
             var metas = new List<GameMetadata>();
-            var detector = new DuplicateDetector(this);
+            var detector = new DuplicateDetector(this, _pathResolver);
             var seenIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var sc in shortcuts)
             {
@@ -1234,35 +1193,6 @@ public class ShortcutsLibrary : LibraryPlugin
         }
     }
 
-    private string? ResolveShortcutsVdfPath()
-    {
-        try
-        {
-            var root = Settings.SteamRootPath ?? string.Empty;
-            if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
-            {
-                return null;
-            }
-            var userdata = Path.Combine(root, Constants.UserDataDirectory);
-            if (!Directory.Exists(userdata))
-            {
-                return null;
-            }
-            foreach (var userDir in Directory.EnumerateDirectories(userdata))
-            {
-                var cfg = Path.Combine(userDir, Constants.ConfigDirectory, "shortcuts.vdf");
-                if (File.Exists(cfg))
-                {
-                    return cfg;
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            Logger.Error(ex, "Failed to resolve shortcuts.vdf path.");
-        }
-        return null;
-    }
 
     private void Games_ItemUpdated(object sender, ItemUpdatedEventArgs<Game> e)
     {
@@ -1293,7 +1223,7 @@ public class ShortcutsLibrary : LibraryPlugin
         // Persist all pending changes from Playnite back to shortcuts.vdf
         try
         {
-            var vdfPath = ResolveShortcutsVdfPath();
+            var vdfPath = _pathResolver.ResolveShortcutsVdfPath();
             if (string.IsNullOrWhiteSpace(vdfPath) || !File.Exists(vdfPath))
             {
                 return;
@@ -1349,9 +1279,9 @@ public class ShortcutsLibrary : LibraryPlugin
                   ?? game.GameActions?.FirstOrDefault();
         if (act != null && act.Type == GameActionType.File)
         {
-            var exe = ExpandPathVariables(game, act.Path) ?? sc.Exe;
-            var args = ExpandPathVariables(game, act.Arguments) ?? sc.LaunchOptions;
-            var dir = ExpandPathVariables(game, act.WorkingDir);
+            var exe = _pathResolver.ExpandPathVariables(game, act.Path) ?? sc.Exe;
+            var args = _pathResolver.ExpandPathVariables(game, act.Arguments) ?? sc.LaunchOptions;
+            var dir = _pathResolver.ExpandPathVariables(game, act.WorkingDir);
             if (string.IsNullOrWhiteSpace(dir))
             {
                 try { dir = Path.GetDirectoryName(exe) ?? sc.StartDir; } catch (Exception ex) { Logger.Warn(ex, "Failed to get directory name."); dir = sc.StartDir; }
