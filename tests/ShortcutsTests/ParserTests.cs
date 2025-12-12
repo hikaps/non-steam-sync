@@ -45,4 +45,58 @@ public class ParserTests
             }
         }
     }
+
+    [Fact]
+    public void StableId_ConsistentAcrossQuotedAndUnquotedPaths()
+    {
+        var shortcut1 = new SteamShortcut
+        {
+            AppName = "Test Game",
+            Exe = "C:\\Games\\Test\\game.exe"
+        };
+
+        var shortcut2 = new SteamShortcut
+        {
+            AppName = "Test Game",
+            Exe = "\"C:\\Games\\Test\\game.exe\""
+        };
+
+        Assert.Equal(shortcut1.StableId, shortcut2.StableId);
+    }
+
+    [Fact]
+    public void StableId_DifferentForDifferentGames()
+    {
+        var shortcut1 = new SteamShortcut
+        {
+            AppName = "Game 1",
+            Exe = "game1.exe"
+        };
+
+        var shortcut2 = new SteamShortcut
+        {
+            AppName = "Game 2",
+            Exe = "game2.exe"
+        };
+
+        Assert.NotEqual(shortcut1.StableId, shortcut2.StableId);
+    }
+
+    [Fact]
+    public void StableId_TrimsWhitespaceInName()
+    {
+        var shortcut1 = new SteamShortcut
+        {
+            AppName = "Test Game",
+            Exe = "game.exe"
+        };
+
+        var shortcut2 = new SteamShortcut
+        {
+            AppName = "  Test Game  ",
+            Exe = "game.exe"
+        };
+
+        Assert.Equal(shortcut1.StableId, shortcut2.StableId);
+    }
 }
