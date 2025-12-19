@@ -75,7 +75,7 @@ public class ShortcutsLibrary : LibraryPlugin
 
     public override System.Windows.Controls.UserControl GetSettingsView(bool firstRunSettings)
     {
-        var view = new PluginSettingsView { DataContext = Settings };
+        var view = new PluginSettingsView(PlayniteApi) { DataContext = Settings };
         return view;
     }
 
@@ -441,6 +441,15 @@ public class ShortcutsLibrary : LibraryPlugin
             .Where(g => g.PluginId == Id && !string.IsNullOrEmpty(g.GameId))
             .ToDictionary(g => g.GameId, g => g, StringComparer.OrdinalIgnoreCase);
 
+        // Get or create the source for Steam Shortcuts
+        var source = PlayniteApi.Database.Sources.FirstOrDefault(s => 
+            string.Equals(s.Name, Constants.SteamShortcutsSourceName, StringComparison.OrdinalIgnoreCase));
+        if (source == null)
+        {
+            source = new GameSource(Constants.SteamShortcutsSourceName);
+            PlayniteApi.Database.Sources.Add(source);
+        }
+
         var newGames = new List<Game>();
         var detector = new DuplicateDetector(this, _pathResolver);
         skipped = 0;
@@ -461,6 +470,7 @@ public class ShortcutsLibrary : LibraryPlugin
                 PluginId = Id,
                 GameId = id,
                 Name = sc.AppName,
+                SourceId = source.Id,
                 InstallDirectory = string.IsNullOrEmpty(sc.StartDir) ? null : sc.StartDir,
                 IsInstalled = true,
                 GameActions = new System.Collections.ObjectModel.ObservableCollection<GameAction>(BuildActionsForShortcut(sc))
@@ -977,6 +987,7 @@ public class ShortcutsLibrary : LibraryPlugin
                     GameId = chosenId,
                     InstallDirectory = string.IsNullOrEmpty(sc.StartDir) ? null : sc.StartDir,
                     Platforms = new HashSet<MetadataProperty> { new MetadataNameProperty(Constants.WindowsPlatformName) },
+                    Source = new MetadataNameProperty(Constants.SteamShortcutsSourceName),
                     Tags = new HashSet<MetadataProperty>(),
                     Links = new List<Link>(),
                     IsInstalled = true,
