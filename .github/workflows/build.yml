@@ -19,7 +19,7 @@ jobs:
         with:
           dotnet-version: '6.x'
       - name: Restore
-        run: dotnet restore
+        run: dotnet restore src/SteamShortcutsImporter/SteamShortcutsImporter.csproj
       - name: Build
         run: dotnet build src/SteamShortcutsImporter/SteamShortcutsImporter.csproj -c Release
       - name: Test
