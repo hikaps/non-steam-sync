@@ -1,57 +1,111 @@
-Playnite Extension: Steam Shortcuts Importer
+# Steam Shortcuts Importer for Playnite
 
 ## Why This Exists
 
-I love Playnite as a clean, flexible launcher, but Steam offers the best controller experience: powerful per‑game profiles, community layouts, Steam Input, and the overlay. This extension bridges the two so you can start games from Playnite while actually launching them through Steam—getting Playnite’s organization and visuals with Steam’s controller magic. It’s the best of both worlds with minimal fuss.
+I love Playnite as a clean, flexible launcher, but Steam offers the best controller experience: powerful per-game profiles, community layouts, Steam Input, and the overlay. This extension bridges the two so you can start games from Playnite while actually launching them through Steam—getting Playnite's organization and visuals with Steam's controller magic. It's the best of both worlds with minimal fuss.
 
-What It Does
-- Import your non‑Steam games from Steam’s “shortcuts” into Playnite.
-- Sync both ways when you want:
-  - Steam → Playnite: import selected shortcuts as Playnite games.
-  - Playnite → Steam: create/update selected shortcuts in Steam.
-- Optional: automatically write your Playnite edits back to Steam (including grid artwork).
+## Features
 
-Install
-- Download the latest `.pext` from Releases (SteamShortcutsImporter-<version>.pext).
-- In Playnite: Add‑ons → Install from file… → choose the `.pext`.
-- Restart Playnite if prompted.
+- **Two-way sync** between Steam shortcuts and Playnite
+- **Artwork support** — covers, icons, and backgrounds are imported/exported automatically
+- **Launch via Steam** — use `steam://rungameid/...` URLs for full controller and overlay support
+- **Automatic write-back** — edits in Playnite sync back to Steam (name, artwork, play actions)
+- **Backup & restore** — automatic backups before changes, with easy restore from settings
+- **Multi-user support** — works with multiple Steam profiles on the same machine
 
-Setup (first run)
-- Add‑ons → Extensions → Steam Shortcuts.
-- Set your Steam folder (e.g., `C:\\Program Files (x86)\\Steam`).
-- Optional: enable “Launch via Steam” to launch via `steam://rungameid/...` when possible.
+## Installation
 
-How To Use
-- Steam → Playnite
-  - Main menu → Steam Shortcuts → “Sync Steam → Playnite…”.
-  - Preview covers/icons, filter by text, show “Only new”, invert selection; the selected count updates live.
-  - Click Import. The extension skips existing items and pulls artwork from Steam’s grid when available.
-- Playnite → Steam
-  - Main menu → Steam Shortcuts → “Sync Playnite → Steam…”.
-  - Pick Playnite games with a file play action to export; existing Steam entries are updated.
-  - Covers/icons/backgrounds are exported into Steam’s grid folder.
-- Automatic write‑backs (optional)
-  - When enabled, editing a Steam Shortcuts game in Playnite (name/play action/tags/artwork) updates `shortcuts.vdf` and Steam grid files automatically.
+1. Download the latest `.pext` from [Releases](../../releases)
+2. In Playnite: **Add-ons → Install from file…** → select the `.pext`
+3. Restart Playnite when prompted
 
-Troubleshooting
-- “No shortcuts found” or nothing imports:
-  - Check the Steam root path in settings. The plugin searches `userdata/<steamid>/config/shortcuts.vdf`.
-  - If you have multiple Steam profiles, ensure the intended one has shortcuts.
-- “Launch via Steam” doesn’t show:
-  - The game needs a known shortcut appid. New exports compute appids automatically.
-- Artwork didn’t copy:
-  - Grid files live under `…/userdata/<steamid>/config/grid`. Make sure the folder exists and is writable.
+## Setup
 
-Notes
-- Uses a small reader/writer for Steam’s binary KeyValues (shortcuts.vdf).
-- Shortcut appids are computed (CRC32) and used to build the `rungameid` launch URL.
+1. Open settings: **Add-ons → Extensions → Steam Shortcuts**
+2. Set your Steam folder:
+   - The path is **auto-detected** from the Windows registry on first run
+   - Use **Browse** to pick a folder manually
+   - Use **Auto-detect** to re-run registry detection
+3. Path validation shows the current status:
+   - ✓ **Valid** — Steam folder found with userdata
+   - ⚠ **Warning** — folder exists but no userdata found
+   - ✗ **Invalid** — folder doesn't exist
+4. Optional: Enable **"Launch via Steam"** to use Steam URLs as the default play action
 
-Branching Policy
-- Experimental features land on feature branches first.
+## Usage
 
-For Developers
-- Build (Windows):
-  - `dotnet restore src/SteamShortcutsImporter/SteamShortcutsImporter.csproj`
-  - `dotnet build src/SteamShortcutsImporter/SteamShortcutsImporter.csproj -c Release`
-- Tests: `dotnet test tests/ShortcutsTests/ShortcutsTests.csproj -c Release`
-- A small CLI tool in `tools/ShortcutsCli` helps validate read/write/round‑trip of `shortcuts.vdf`.
+### Importing from Steam → Playnite
+
+1. **Main menu → Steam Shortcuts → "Sync Steam → Playnite…"**
+2. Preview covers/icons, filter by text, toggle "Only new"
+3. Select the shortcuts you want to import
+4. Click **Import** — artwork is pulled from Steam's grid folder automatically
+
+### Exporting from Playnite → Steam
+
+1. **Main menu → Steam Shortcuts → "Sync Playnite → Steam…"**
+2. Select games with a file-based play action
+3. Click **Export** — games are added/updated in `shortcuts.vdf`
+4. Covers, icons, and backgrounds are copied to Steam's grid folder
+
+### Automatic Write-back
+
+When enabled, editing a Steam Shortcuts game in Playnite (name, play action, tags, artwork) automatically updates `shortcuts.vdf` and Steam grid files. Changes are debounced to prevent race conditions.
+
+### Backup & Restore
+
+- **Automatic backups**: Before any write to `shortcuts.vdf`, a timestamped backup is created
+- **Restore**: In settings, click **"Restore Backup…"** to select a previous backup
+- Backups are stored per Steam user: `<plugin-data>/backups/<userId>/`
+- The last 5 backups per user are retained
+
+### Context Menu Actions
+
+Right-click any game for quick actions:
+
+- **Add/Update in Steam** — export selected games to Steam shortcuts
+- **Copy Steam Launch URL** — copy the `steam://rungameid/...` URL to clipboard
+- **Open Steam Grid Folder** — open the artwork folder in Explorer
+
+## Troubleshooting
+
+### "No shortcuts found" or nothing imports
+
+- Check the Steam root path in settings
+- The plugin searches `userdata/<steamid>/config/shortcuts.vdf`
+- If you have multiple Steam profiles, ensure the intended one has shortcuts
+
+### "Launch via Steam" doesn't work
+
+- The game needs a known shortcut appid
+- New exports compute appids automatically using Steam's CRC32 algorithm
+- Try re-exporting the game to Steam
+
+### Artwork didn't copy
+
+- Grid files live under `userdata/<steamid>/config/grid/`
+- Ensure the folder exists and is writable
+- Supported formats: PNG, JPG, ICO
+
+### Changes not appearing in Steam
+
+- **Close Steam** before making changes — Steam caches `shortcuts.vdf` in memory
+- If Steam was running, restart it to see updates
+
+### Steam warns about running
+
+- The plugin detects if Steam is running and warns you
+- For best results, close Steam before syncing
+
+## How It Works
+
+- Uses a binary KeyValues reader/writer for Steam's `shortcuts.vdf` format
+- Shortcut appids are computed using CRC32 (matching Steam's algorithm)
+- The `rungameid` URL format: `steam://rungameid/<gameId>` where gameId encodes the appid
+- StableIds (hash of exe+name) ensure consistent matching across syncs
+
+---
+
+## AI Disclosure
+
+This project was developed with assistance from AI tools for code generation, documentation, and debugging.

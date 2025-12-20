@@ -10,8 +10,9 @@ public class ArtworkManagerTests
     [Fact]
     public void TryGetGridDirFromVdf_ValidPath_ReturnsGridDir()
     {
-        var vdfPath = "/steam/userdata/12345/config/shortcuts.vdf";
-        var expectedGridDir = Path.Combine("/steam/userdata/12345/config", "grid");
+        // Use Path.Combine to create platform-appropriate paths
+        var vdfPath = Path.Combine("C:", "Steam", "userdata", "12345", "config", "shortcuts.vdf");
+        var expectedGridDir = Path.Combine("C:", "Steam", "userdata", "12345", "config", "grid");
 
         // Create a mock ArtworkManager (we can't fully instantiate without IPlayniteAPI)
         // Instead, test the logic directly

@@ -1,19 +1,12 @@
 name: build
 
 on:
-  push:
-    branches:
-      - main
-      - develop
-      - 'feature/**'
-      - 'fix/**'
-      - 'refactor/**'
   pull_request:
-    branches: [ main ]
+    branches: [ develop ]
 
 jobs:
-  plugin-windows:
-    name: Build Playnite 10 plugin (Windows)
+  build-and-test:
+    name: Build and Test (Windows)
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -29,6 +22,8 @@ jobs:
         run: dotnet restore src/SteamShortcutsImporter/SteamShortcutsImporter.csproj
       - name: Build
         run: dotnet build src/SteamShortcutsImporter/SteamShortcutsImporter.csproj -c Release
+      - name: Test
+        run: dotnet test tests/ShortcutsTests/ShortcutsTests.csproj -c Release
       - name: Package .pext
         shell: pwsh
         run: |
@@ -49,23 +44,3 @@ jobs:
         with:
           name: SteamShortcutsImporter-${{ steps.vars.outputs.short_sha }}.pext
           path: SteamShortcutsImporter-*.pext
-
-  tests-ubuntu:
-    name: Parser tests (Ubuntu)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '6.x'
-      - name: Restore
-        run: dotnet restore tests/ShortcutsTests/ShortcutsTests.csproj
-      - name: Test
-        run: dotnet test tests/ShortcutsTests/ShortcutsTests.csproj -c Release --logger "trx;LogFileName=test_results.trx"
-      - name: Upload test results
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: test-results
-          path: tests/ShortcutsTests/TestResults/**
