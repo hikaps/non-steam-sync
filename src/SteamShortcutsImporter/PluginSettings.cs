@@ -67,16 +67,41 @@ public class PluginSettings : ISettings
         }
     }
 
-    private static string? GuessSteamRootPath()
+    /// <summary>
+    /// Attempts to auto-detect the Steam installation path from registry and common locations.
+    /// </summary>
+    public static string? GuessSteamRootPath()
     {
         try
         {
-            var regPath = Registry.CurrentUser.OpenSubKey(Constants.SteamRegistryPath)?.GetValue(Constants.SteamPathRegistryValue) as string;
+            // 1. Try HKCU (current user) - most common
+            var regPath = Registry.CurrentUser
+                .OpenSubKey(Constants.SteamRegistryPath)?
+                .GetValue(Constants.SteamPathRegistryValue) as string;
             if (!string.IsNullOrWhiteSpace(regPath) && Directory.Exists(regPath))
             {
                 return regPath;
             }
 
+            // 2. Try HKLM (system-wide installation)
+            regPath = Registry.LocalMachine
+                .OpenSubKey(Constants.SteamRegistryPathHKLM)?
+                .GetValue(Constants.SteamInstallPathRegistryValue) as string;
+            if (!string.IsNullOrWhiteSpace(regPath) && Directory.Exists(regPath))
+            {
+                return regPath;
+            }
+
+            // 3. Try HKLM WOW6432Node (32-bit registry on 64-bit Windows)
+            regPath = Registry.LocalMachine
+                .OpenSubKey(Constants.SteamRegistryPathWow64)?
+                .GetValue(Constants.SteamInstallPathRegistryValue) as string;
+            if (!string.IsNullOrWhiteSpace(regPath) && Directory.Exists(regPath))
+            {
+                return regPath;
+            }
+
+            // 4. Environment variable fallbacks
             var pf86 = Environment.GetEnvironmentVariable(Constants.ProgramFilesX86EnvVar);
             var pf = Environment.GetEnvironmentVariable(Constants.ProgramFilesEnvVar);
             var local = Environment.GetEnvironmentVariable(Constants.LocalAppDataEnvVar);
@@ -96,6 +121,7 @@ public class PluginSettings : ISettings
                 }
             }
 
+            // 5. Hardcoded fallbacks
             var fallback1 = Constants.DefaultSteamPathX86;
             if (Directory.Exists(fallback1))
             {
