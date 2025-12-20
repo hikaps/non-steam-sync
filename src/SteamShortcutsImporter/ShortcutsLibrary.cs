@@ -97,28 +97,170 @@ public class ShortcutsLibrary : LibraryPlugin
         return Instance?.GetBackupRootDir();
     }
 
-    private void CreateManagedBackup(string sourceFilePath, string kind)
+    /// <summary>
+    /// Gets the backup folder path for a specific Steam user.
+    /// </summary>
+    internal string GetBackupFolderForUser(string userId)
+    {
+        return Path.Combine(GetBackupRootDir(), userId);
+    }
+
+    /// <summary>
+    /// Gets the backup folder for a specific Steam user (static version for settings view).
+    /// </summary>
+    internal static string? TryGetBackupFolderForUserStatic(string userId)
+    {
+        return Instance?.GetBackupFolderForUser(userId);
+    }
+
+    /// <summary>
+    /// Gets all Steam user IDs from the userdata directory.
+    /// </summary>
+    internal List<string> GetSteamUserIds()
+    {
+        var result = new List<string>();
+        try
+        {
+            var root = Settings.SteamRootPath;
+            if (string.IsNullOrWhiteSpace(root)) return result;
+
+            var userdata = Path.Combine(root, Constants.UserDataDirectory);
+            if (!Directory.Exists(userdata)) return result;
+
+            foreach (var userDir in Directory.EnumerateDirectories(userdata))
+            {
+                var userId = Path.GetFileName(userDir);
+                // Filter out non-numeric directories (e.g., "ac" for anonymous)
+                if (!string.IsNullOrEmpty(userId) && userId.All(char.IsDigit))
+                {
+                    result.Add(userId);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn(ex, "Failed to enumerate Steam user IDs.");
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Gets all Steam user IDs (static version for settings view).
+    /// </summary>
+    internal static List<string> GetSteamUserIdsStatic()
+    {
+        return Instance?.GetSteamUserIds() ?? new List<string>();
+    }
+
+    /// <summary>
+    /// Gets the shortcuts.vdf path for a specific Steam user.
+    /// </summary>
+    internal string? GetShortcutsVdfPathForUser(string userId)
+    {
+        try
+        {
+            var root = Settings.SteamRootPath;
+            if (string.IsNullOrWhiteSpace(root)) return null;
+
+            var vdfPath = Path.Combine(root, Constants.UserDataDirectory, userId, Constants.ConfigDirectory, "shortcuts.vdf");
+            return vdfPath;
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn(ex, $"Failed to get shortcuts.vdf path for user {userId}.");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Gets the shortcuts.vdf path for a specific Steam user (static version for settings view).
+    /// </summary>
+    internal static string? GetShortcutsVdfPathForUserStatic(string userId)
+    {
+        return Instance?.GetShortcutsVdfPathForUser(userId);
+    }
+
+    /// <summary>
+    /// Restores a backup file to the shortcuts.vdf for the specified user.
+    /// Creates a backup of the current shortcuts.vdf before restoring.
+    /// </summary>
+    internal bool RestoreBackup(string backupFilePath, string userId)
+    {
+        try
+        {
+            if (!File.Exists(backupFilePath))
+            {
+                Logger.Warn($"Backup file not found: {backupFilePath}");
+                return false;
+            }
+
+            var targetVdfPath = GetShortcutsVdfPathForUser(userId);
+            if (string.IsNullOrEmpty(targetVdfPath))
+            {
+                Logger.Warn($"Could not determine shortcuts.vdf path for user {userId}");
+                return false;
+            }
+
+            // Create backup of current file before restoring (if it exists)
+            if (File.Exists(targetVdfPath))
+            {
+                CreateManagedBackup(targetVdfPath!, userId);
+            }
+
+            // Ensure target directory exists
+            var targetDir = Path.GetDirectoryName(targetVdfPath);
+            if (!string.IsNullOrEmpty(targetDir))
+            {
+                Directory.CreateDirectory(targetDir);
+            }
+
+            // Restore the backup
+            File.Copy(backupFilePath, targetVdfPath, overwrite: true);
+            Logger.Info($"Restored backup '{backupFilePath}' to '{targetVdfPath}'");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex, $"Failed to restore backup '{backupFilePath}'");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Restores a backup file (static version for settings view).
+    /// </summary>
+    internal static bool RestoreBackupStatic(string backupFilePath, string userId)
+    {
+        return Instance?.RestoreBackup(backupFilePath, userId) ?? false;
+    }
+
+    /// <summary>
+    /// Gets the Playnite API instance (static version for settings view).
+    /// </summary>
+    internal static IPlayniteAPI? GetPlayniteApiStatic()
+    {
+        return Instance?.PlayniteApi;
+    }
+
+    private void CreateManagedBackup(string sourceFilePath, string userId)
     {
         try
         {
             if (string.IsNullOrEmpty(sourceFilePath) || !File.Exists(sourceFilePath)) return;
-            var root = GetBackupRootDir();
-            if (string.IsNullOrEmpty(root)) return;
-            var dir = Path.Combine(root, kind);
+            
+            // Use new structure: backups/{userId}/
+            var dir = GetBackupFolderForUser(userId);
+            if (string.IsNullOrEmpty(dir)) return;
             Directory.CreateDirectory(dir);
 
-            string sourceName = Path.GetFileNameWithoutExtension(sourceFilePath);
-            string userSegment = TryGetSteamUserFromPath(sourceFilePath) ?? Constants.DefaultUserSegment;
             string ts = DateTime.Now.ToString(Constants.TimestampFormat);
-            string backupName = $"{kind}-{userSegment}-{sourceName}-{ts}{Constants.BackupFileExtension}";
+            string backupName = string.Format(Constants.BackupFilenameFormat, ts);
             string dst = Path.Combine(dir, backupName);
             File.Copy(sourceFilePath, dst, overwrite: true);
 
-            // keep last 5 backups for this kind/user/sourceName
-            var patternPrefix = $"{kind}-{userSegment}-{sourceName}-";
+            // Keep last 5 backups for this user
             var files = new DirectoryInfo(dir)
                 .GetFiles(Constants.BackupFileSearchPattern)
-                .Where(f => f.Name.StartsWith(patternPrefix, StringComparison.OrdinalIgnoreCase))
                 .OrderByDescending(f => f.LastWriteTimeUtc)
                 .ToList();
             for (int i = 5; i < files.Count; i++)
@@ -1147,7 +1289,8 @@ public class ShortcutsLibrary : LibraryPlugin
 
         try
         {
-            CreateManagedBackup(vdfPath, Constants.ShortcutsKind);
+            var userId = TryGetSteamUserFromPath(vdfPath) ?? Constants.DefaultUserSegment;
+            CreateManagedBackup(vdfPath, userId);
         }
         catch (Exception ex)
         {

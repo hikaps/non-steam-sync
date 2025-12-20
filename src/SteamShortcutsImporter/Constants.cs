@@ -64,4 +64,16 @@ internal static class Constants
     public const string AllowOverlayKey = "AllowOverlay";
     public const string OpenVRKey = "OpenVR";
     public const string TagsKey = "tags";
+
+    // Backup/Restore UI labels
+    public const string RestoreBackupLabel = "Restore Backup...";
+    public const string RestoreBackupDialogTitle = "Restore Backup";
+    public const string RestoreConfirmMessage = "Restore this backup?\n\nYour current shortcuts will be backed up first.";
+    public const string RestoreSuccessMessage = "Backup restored successfully.";
+    public const string RestoreFailedMessage = "Failed to restore backup.";
+    public const string NoBackupsFoundMessage = "No backups found for this Steam user.";
+    public const string SelectSteamUserTitle = "Select Steam User";
+    public const string SelectSteamUserMessage = "Multiple Steam users found. Select which user's backup to restore:";
+    public const string BackupFileFilter = "VDF Backup Files (*.bak.vdf)|*.bak.vdf";
+    public const string BackupFilenameFormat = "shortcuts-{0}.bak.vdf";
 }
