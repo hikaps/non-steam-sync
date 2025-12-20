@@ -60,9 +60,9 @@ public class ShortcutsLibrary : LibraryPlugin
 
     public override void Dispose()
     {
-        // Clean up debounce timer
-        _updateDebounceTimer?.Dispose();
-        _updateDebounceTimer = null;
+        // Thread-safe cleanup of debounce timer using Interlocked.Exchange
+        var timer = Interlocked.Exchange(ref _updateDebounceTimer, null);
+        timer?.Dispose();
         
         base.Dispose();
     }
@@ -602,7 +602,13 @@ public class ShortcutsLibrary : LibraryPlugin
         var byPlayniteId = new Dictionary<string, uint>(StringComparer.OrdinalIgnoreCase);
         try
         {
-            foreach (var kv in Settings.ExportMap)
+            var exportMap = Settings?.ExportMap;
+            if (exportMap == null)
+            {
+                return byPlayniteId;
+            }
+
+            foreach (var kv in exportMap)
             {
                 if (uint.TryParse(kv.Key, out var appId) && !string.IsNullOrEmpty(kv.Value))
                 {
@@ -1167,9 +1173,10 @@ public class ShortcutsLibrary : LibraryPlugin
         {
             _hasPendingUpdates = true;
             
-            // Reset timer - this delays execution until UpdateDebounceMs after the LAST update
-            _updateDebounceTimer?.Dispose();
-            _updateDebounceTimer = new Timer(_ => ProcessPendingGameUpdates(), null, UpdateDebounceMs, Timeout.Infinite);
+            // Thread-safe timer replacement - dispose old timer and create new one atomically
+            var newTimer = new Timer(_ => ProcessPendingGameUpdates(), null, UpdateDebounceMs, Timeout.Infinite);
+            var oldTimer = Interlocked.Exchange(ref _updateDebounceTimer, newTimer);
+            oldTimer?.Dispose();
         }
     }
     
