@@ -64,4 +64,34 @@ internal static class Constants
     public const string AllowOverlayKey = "AllowOverlay";
     public const string OpenVRKey = "OpenVR";
     public const string TagsKey = "tags";
+
+    // Backup/Restore UI labels
+    public const string RestoreBackupLabel = "Restore Backup...";
+    public const string RestoreBackupDialogTitle = "Restore Backup";
+    public const string RestoreConfirmMessage = "Restore this backup?\n\nYour current shortcuts will be backed up first.";
+    public const string RestoreSuccessMessage = "Backup restored successfully.";
+    public const string RestoreFailedMessage = "Failed to restore backup.";
+    public const string NoBackupsFoundMessage = "No backups found for this Steam user.";
+    public const string SelectSteamUserTitle = "Select Steam User";
+    public const string SelectSteamUserMessage = "Multiple Steam users found. Select which user's backup to restore:";
+    public const string BackupFileFilter = "VDF Backup Files (*.bak.vdf)|*.bak.vdf";
+    public const string BackupFilenameFormat = "shortcuts-{0}.bak.vdf";
+
+    // Settings UI labels
+    public const string BrowseButtonLabel = "Browse...";
+    public const string AutoDetectButtonLabel = "Auto-detect";
+    public const string PathValidMessage = "Valid Steam path";
+    public const string PathInvalidMessage = "Path not found";
+    public const string PathNoUserdataMessage = "userdata folder not found - verify this is your Steam installation";
+    public const string PathNoVdfInfoMessage = "No shortcuts.vdf found yet - add a non-Steam game in Steam first";
+    public const string AutoDetectFailedMessage = "Could not auto-detect Steam installation path.";
+    public const string SteamPathLabel = "Steam installation path:";
+
+    // Registry paths (HKLM)
+    public const string SteamRegistryPathHKLM = @"SOFTWARE\Valve\Steam";
+    public const string SteamRegistryPathWow64 = @"SOFTWARE\WOW6432Node\Valve\Steam";
+    public const string SteamInstallPathRegistryValue = "InstallPath";
+
+    // Source property for imported games
+    public const string SteamShortcutsSourceName = "Steam Shortcuts";
 }
