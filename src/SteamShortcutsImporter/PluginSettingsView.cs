@@ -124,10 +124,22 @@ public class PluginSettingsView : UserControl
             }
 
             // Open file dialog in the backup folder
-            var selectedFile = api.Dialogs.SelectFile(Constants.BackupFileFilter + "|All Files (*.*)|*.*");
-            if (string.IsNullOrEmpty(selectedFile))
+            var dialog = new Microsoft.Win32.OpenFileDialog
+            {
+                Title = Constants.RestoreBackupDialogTitle,
+                Filter = Constants.BackupFileFilter + "|All Files (*.*)|*.*",
+                InitialDirectory = backupFolder
+            };
+
+            if (dialog.ShowDialog() != true)
             {
                 return; // User cancelled
+            }
+
+            var selectedFile = dialog.FileName;
+            if (string.IsNullOrEmpty(selectedFile))
+            {
+                return;
             }
 
             // Verify the selected file is a backup file
