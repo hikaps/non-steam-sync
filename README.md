@@ -1,4 +1,4 @@
-# Steam Shortcuts Importer for Playnite
+# Non-Steam Sync for Playnite
 
 ## Why This Exists
 
