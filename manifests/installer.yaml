@@ -1,0 +1,10 @@
+AddonId: f15771cd-b6d7-4a3d-9b8e-08786a13d9c7
+Packages:
+  - Version: 0.4.0
+    RequiredApiVersion: 6.0.0
+    ReleaseDate: 2025-12-20
+    PackageUrl: https://github.com/hikaps/non-steam-sync/releases/download/v0.4.0/SteamShortcutsImporter-v0.4.0.pext
+    Changelog:
+      - Improved stability with thread-safety fixes
+      - Added backup and restore functionality
+      - Enhanced test coverage
