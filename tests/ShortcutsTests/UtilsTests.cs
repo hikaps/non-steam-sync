@@ -11,7 +11,7 @@ public class UtilsTests
     [InlineData("  C:\\Games\\Foo.exe  ", "C:\\Games\\Foo.exe")]
     [InlineData("\"  C:\\Games\\Foo.exe  \"", "  C:\\Games\\Foo.exe  ")]  // Quotes removed first, then inner spaces preserved
     [InlineData("", "")]
-    [InlineData(null, "")]
+    [InlineData(null!, "")]
     [InlineData("   ", "")]
     [InlineData("\"\"", "")]
     [InlineData("\"C:\\Path\"", "C:\\Path")]
@@ -57,8 +57,8 @@ public class UtilsTests
     public void GenerateShortcutAppId_HandlesNullAndEmpty()
     {
         // Should not throw
-        var appId1 = Utils.GenerateShortcutAppId(null, "Game");
-        var appId2 = Utils.GenerateShortcutAppId("game.exe", null);
+        var appId1 = Utils.GenerateShortcutAppId(null!, "Game");
+        var appId2 = Utils.GenerateShortcutAppId("game.exe", null!);
         var appId3 = Utils.GenerateShortcutAppId("", "");
         
         Assert.True((appId1 & 0x80000000u) != 0);
