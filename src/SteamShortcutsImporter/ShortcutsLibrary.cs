@@ -6,7 +6,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
-using System.Windows.Media;
 
 namespace SteamShortcutsImporter;
 
@@ -928,16 +927,6 @@ public class ShortcutsLibrary : LibraryPlugin
             Logger.Warn(ex, "Failed to ensure play action.");
         }
     }
-
-    
-
-    
-
-
-
-    
-
-    
 
     private static bool LooksLikeUrl(string? s)
     {
