@@ -24,7 +24,7 @@ public class DuplicateUtilsTests
     }
 
     [Fact]
-    public void NormalizePath_HandlesBackslashesAndForwardSlashes()
+    public void GetAbsolutePath_HandlesBackslashesAndForwardSlashes()
     {
         // Test that paths with backslashes and forward slashes normalize correctly
         var path1 = "game/test.exe";
@@ -35,11 +35,11 @@ public class DuplicateUtilsTests
 
     [Theory]
     [InlineData("")]
-    [InlineData(null)]
+    [InlineData(null!)]
     [InlineData("   ")]
-    public void NormalizePath_EmptyOrWhitespace_ReturnsEmpty(string input)
+    public void GetAbsolutePath_EmptyOrWhitespace_ReturnsEmpty(string input)
     {
-        Assert.Equal(string.Empty, DuplicateUtils.NormalizePath(input));
+        Assert.Equal(string.Empty, DuplicateUtils.GetAbsolutePath(input));
     }
 
     [Fact]
@@ -49,10 +49,10 @@ public class DuplicateUtilsTests
     }
 
     [Fact]
-    public void NormalizePath_RelativePath_ConvertsToAbsolute()
+    public void GetAbsolutePath_RelativePath_ConvertsToAbsolute()
     {
         var relative = "test.txt";
-        var normalized = DuplicateUtils.NormalizePath(relative);
+        var normalized = DuplicateUtils.GetAbsolutePath(relative);
         
         // Should be converted to absolute path (current directory + relative)
         Assert.NotEqual(relative, normalized);
