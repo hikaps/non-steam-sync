@@ -82,7 +82,7 @@ internal sealed class DuplicateDetector
             }
 
             // 2) Name + File path match across all games
-            var scExeNorm = DuplicateUtils.NormalizePath(sc.Exe);
+            var scExeNorm = DuplicateUtils.GetAbsolutePath(sc.Exe);
             if (!string.IsNullOrEmpty(scExeNorm))
             {
                 foreach (var g in lib.PlayniteApi.Database.Games.Where(x => string.Equals(x.Name, sc.AppName, StringComparison.OrdinalIgnoreCase)))
@@ -91,7 +91,7 @@ internal sealed class DuplicateDetector
                     if (act?.Type == GameActionType.File && !string.IsNullOrEmpty(act.Path))
                     {
                         var exe = pathResolver.ExpandPathVariables(g, act.Path) ?? string.Empty;
-                        var exeNorm = DuplicateUtils.NormalizePath(exe);
+                        var exeNorm = DuplicateUtils.GetAbsolutePath(exe);
                         if (string.Equals(exeNorm, scExeNorm, StringComparison.OrdinalIgnoreCase))
                         {
                             return true;
