@@ -702,8 +702,24 @@ public class ShortcutsLibrary : LibraryPlugin
                     : displayAction.Path ?? string.Empty)
                 : string.Empty;
 
-            var label = (name + " — " + target) + (exists ? Constants.SteamTag : string.Empty);
-            return new SelectionCandidate(label, hasAction, exists);
+            // Check if this game needs exe discovery (no file action but might be exportable)
+            var needsExeDiscovery = fileAction == null && !string.IsNullOrEmpty(game.InstallDirectory);
+            
+            // Build display label
+            string label;
+            if (needsExeDiscovery)
+            {
+                // Show indicator that this game will prompt for exe selection
+                label = name + " — " + Constants.ExeNotSetIndicator;
+            }
+            else
+            {
+                label = (name + " — " + target) + (exists ? Constants.SteamTag : string.Empty);
+            }
+            
+            // Games needing discovery are considered to have a potential action
+            var hasPlayableAction = hasAction || needsExeDiscovery;
+            return new SelectionCandidate(label, hasPlayableAction, exists);
         }
         catch (Exception ex)
         {

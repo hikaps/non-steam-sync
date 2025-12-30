@@ -107,4 +107,7 @@ internal static class Constants
     public const string SkipReasonNoInstallDir = "No install directory";
     public const string SkipReasonUserSkipped = "Skipped by user";
     public const string SkipReasonEmulator = "Emulator-based games not supported";
+
+    // Selection dialog indicators
+    public const string ExeNotSetIndicator = "(executable not set - will prompt)";
 }
