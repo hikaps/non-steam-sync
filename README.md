@@ -75,6 +75,28 @@ Right-click any game for quick actions:
 - The plugin searches `userdata/<steamid>/config/shortcuts.vdf`
 - If you have multiple Steam profiles, ensure the intended one has shortcuts
 
+### Games skipped during export
+
+When exporting from Playnite to Steam, some games may be skipped. Common reasons:
+
+- **"No executable found"**: The plugin couldn't detect a game executable. This happens with games from some launchers (Epic, EA, Amazon) that don't expose their exe path to Playnite.
+- **"No install directory"**: The game has no install path set in Playnite.
+- **"Skipped by user"**: You chose to skip the game when prompted.
+
+**How the plugin finds executables:**
+
+1. Uses the game's existing File action (if set)
+2. Falls back to URL action (creates a double-launcher shortcut)
+3. For GOG games: parses the `goggame-*.info` manifest
+4. Scans the install directory for exe files (filters out common installers/redistributables)
+5. If auto-detection fails: prompts you to browse for the executable manually
+
+**To fix skipped games:**
+
+1. Try right-clicking the game in Playnite and adding a manual play action
+2. When prompted to browse, select the game's main executable
+3. The selection is saved so future exports will work automatically
+
 ### "Launch via Steam" doesn't work
 
 - The game needs a known shortcut appid

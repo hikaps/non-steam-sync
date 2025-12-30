@@ -3,6 +3,7 @@ using Playnite.SDK.Models;
 using Playnite.SDK.Plugins;
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -721,11 +722,79 @@ public class ShortcutsLibrary : LibraryPlugin
         }
 
         var res = AddGamesToSteamCore(games);
-        var msg = $"Updated shortcuts.vdf. +{res.Added}/~{res.Updated}, skipped {res.Skipped}.";
+        
+        // Build result message
+        var msg = $"Added: {res.Added}, Updated: {res.Updated}";
+        if (res.Skipped > 0)
+        {
+            msg += $", Skipped: {res.Skipped}";
+            if (res.SkippedGames.Count > 0 && res.SkippedGames.Count <= 5)
+            {
+                msg += "\n\nSkipped games:\n• " + string.Join("\n• ", res.SkippedGames);
+            }
+            else if (res.SkippedGames.Count > 5)
+            {
+                msg += $"\n\nSkipped games:\n• " + string.Join("\n• ", res.SkippedGames.Take(5));
+                msg += $"\n... and {res.SkippedGames.Count - 5} more (see logs for details)";
+            }
+        }
+        
         PlayniteApi.Dialogs.ShowMessage(msg, Name);
     }
 
-    private sealed class ExportResult { public int Added; public int Updated; public int Skipped; }
+    private sealed class ExportResult 
+    { 
+        public int Added; 
+        public int Updated; 
+        public int Skipped;
+        public List<string> SkippedGames = new List<string>();
+    }
+
+    /// <summary>
+    /// Result from attempting to get or discover game action details.
+    /// </summary>
+    private enum ExeDiscoveryResult
+    {
+        Success,
+        NoAction,
+        UserSkipped,
+        UserSkippedAll
+    }
+
+    // Tracks "Skip All" state during batch export
+    private bool _skipAllRemaining = false;
+
+    // Tracks whether Steam check was already performed for the current batch
+    private bool _steamCheckPerformed = false;
+
+    /// <summary>
+    /// Checks if Steam is running and prompts the user to confirm proceeding.
+    /// Returns true if we should proceed, false if user cancelled.
+    /// </summary>
+    private bool CheckSteamRunningAndConfirm()
+    {
+        _steamCheckPerformed = true;
+        
+        if (!SteamProcessHelper.IsSteamRunning())
+        {
+            return true;
+        }
+
+        var result = PlayniteApi.Dialogs.ShowMessage(
+            SteamProcessHelper.GetSteamRunningWarning(),
+            Name,
+            System.Windows.MessageBoxButton.YesNo,
+            System.Windows.MessageBoxImage.Warning
+        );
+        
+        if (result == System.Windows.MessageBoxResult.No)
+        {
+            return false;
+        }
+        
+        Logger.Warn("User proceeded with export despite Steam running.");
+        return true;
+    }
 
     private ExportResult AddGamesToSteamCore(IEnumerable<Game> games)
     {
@@ -735,17 +804,42 @@ public class ShortcutsLibrary : LibraryPlugin
             return new ExportResult();
         }
 
+        // Check if Steam is running BEFORE processing any games (and showing browse dialogs)
+        if (!CheckSteamRunningAndConfirm())
+        {
+            Logger.Info("User cancelled export due to Steam running.");
+            _steamCheckPerformed = false; // Reset for next operation
+            return new ExportResult();
+        }
+
         var shortcuts = File.Exists(vdfPath) ? ShortcutsFile.Read(vdfPath!).ToList() : new List<SteamShortcut>();
         var existing = shortcuts.ToDictionary(s => s.AppId, s => s);
         var byPlayniteId = BuildPlayniteIdLookup();
 
+        // Reset skip all state for this batch
+        _skipAllRemaining = false;
+
         int added = 0, updated = 0, skipped = 0;
+        var skippedGames = new List<string>();
+
         foreach (var g in games)
         {
-            var (exePath, workDir, name, action) = GetGameActionDetails(g, existing, byPlayniteId);
-            if (action == null)
+            var (exePath, workDir, name, action, result) = GetGameActionDetailsWithFallback(g, existing, byPlayniteId);
+            
+            if (result == ExeDiscoveryResult.UserSkippedAll)
+            {
+                // User chose "Skip All" - skip remaining games silently
+                skipped++;
+                skippedGames.Add($"{g.Name}: {Constants.SkipReasonUserSkipped}");
+                continue;
+            }
+            
+            if (action == null || result != ExeDiscoveryResult.Success)
             {
                 skipped++;
+                var reason = GetSkipReason(g, result);
+                skippedGames.Add($"{g.Name}: {reason}");
+                Logger.Info($"Skipping '{g.Name}': {reason}");
                 continue;
             }
 
@@ -755,64 +849,246 @@ public class ShortcutsLibrary : LibraryPlugin
         }
 
         WriteShortcutsWithBackup(vdfPath!, shortcuts);
-        return new ExportResult { Added = added, Updated = updated, Skipped = skipped };
+        return new ExportResult { Added = added, Updated = updated, Skipped = skipped, SkippedGames = skippedGames };
     }
 
-    private (string, string?, string, GameAction?) GetGameActionDetails(Game g, Dictionary<uint, SteamShortcut> existing, Dictionary<string, uint> byPlayniteId)
+    private static string GetSkipReason(Game g, ExeDiscoveryResult result)
     {
-        var fileAction = g.GameActions?.FirstOrDefault(a => a.Type == GameActionType.File);
-        var action = fileAction ?? (g.GameActions?.FirstOrDefault(a => a.IsPlayAction) ?? g.GameActions?.FirstOrDefault());
-        if (action == null || string.IsNullOrEmpty(action.Path))
+        return result switch
         {
-            return (string.Empty, null, string.Empty, null);
+            ExeDiscoveryResult.UserSkipped => Constants.SkipReasonUserSkipped,
+            ExeDiscoveryResult.UserSkippedAll => Constants.SkipReasonUserSkipped,
+            _ => string.IsNullOrEmpty(g.InstallDirectory) ? Constants.SkipReasonNoInstallDir : Constants.SkipReasonNoExecutable
+        };
+    }
+
+    /// <summary>
+    /// Gets game action details with fallback chain for games without GameActions.
+    /// Fallback order:
+    /// 1. GameActions with File type
+    /// 2. GameActions with URL type (double-launcher)
+    /// 3. GOG manifest parsing
+    /// 4. Exe discovery from InstallDirectory
+    /// 5. Browse dialog (if ambiguous or not found)
+    /// </summary>
+    private (string exePath, string? workDir, string name, GameAction? action, ExeDiscoveryResult result) GetGameActionDetailsWithFallback(
+        Game g, 
+        Dictionary<uint, SteamShortcut> existing, 
+        Dictionary<string, uint> byPlayniteId)
+    {
+        // Check if user chose "Skip All" earlier
+        if (_skipAllRemaining)
+        {
+            return (string.Empty, null, string.Empty, null, ExeDiscoveryResult.UserSkippedAll);
         }
 
-        string exePath = string.Empty;
-        string? workDir = null;
-        string name;
+        // 1. Try existing File action first
+        var fileAction = g.GameActions?.FirstOrDefault(a => a.Type == GameActionType.File && !string.IsNullOrEmpty(a.Path));
+        if (fileAction != null)
+        {
+            var result = BuildFileActionResult(g, fileAction);
+            return (result.exePath, result.workDir, result.name, fileAction, ExeDiscoveryResult.Success);
+        }
 
+        // 2. Try URL action (double-launcher fallback)
+        var urlAction = g.GameActions?.FirstOrDefault(a => a.Type == GameActionType.URL && !string.IsNullOrEmpty(a.Path));
+        if (urlAction != null)
+        {
+            var result = BuildUrlActionResult(g, urlAction, existing, byPlayniteId);
+            if (result.action != null)
+            {
+                Logger.Info($"Using URL action for '{g.Name}': {urlAction.Path}");
+                return (result.exePath, result.workDir, result.name, result.action, ExeDiscoveryResult.Success);
+            }
+        }
+
+        // 3. No valid GameActions - try exe discovery
+        if (!string.IsNullOrEmpty(g.InstallDirectory) && Directory.Exists(g.InstallDirectory))
+        {
+            // First try automatic discovery
+            var discoveredExe = _pathResolver.TryDiscoverExecutable(g);
+            if (!string.IsNullOrEmpty(discoveredExe))
+            {
+                var newAction = CreateAndPersistFileAction(g, discoveredExe!);
+                var result = BuildFileActionResult(g, newAction);
+                return (result.exePath, result.workDir, result.name, newAction, ExeDiscoveryResult.Success);
+            }
+
+            // Automatic discovery failed - show browse dialog
+            var (selectedExe, userResult) = ShowBrowseForExeDialog(g);
+            if (userResult == ExeDiscoveryResult.UserSkippedAll)
+            {
+                _skipAllRemaining = true;
+                return (string.Empty, null, string.Empty, null, ExeDiscoveryResult.UserSkippedAll);
+            }
+            if (userResult == ExeDiscoveryResult.UserSkipped || string.IsNullOrEmpty(selectedExe))
+            {
+                return (string.Empty, null, string.Empty, null, ExeDiscoveryResult.UserSkipped);
+            }
+
+            // User selected an exe - persist and use it
+            var action = CreateAndPersistFileAction(g, selectedExe!);
+            var actionResult = BuildFileActionResult(g, action);
+            return (actionResult.exePath, actionResult.workDir, actionResult.name, action, ExeDiscoveryResult.Success);
+        }
+
+        // 4. Nothing found - skip
+        Logger.Warn($"Cannot export '{g.Name}': No GameActions, no InstallDirectory, or InstallDirectory doesn't exist.");
+        return (string.Empty, null, string.Empty, null, ExeDiscoveryResult.NoAction);
+    }
+
+    private (string exePath, string? workDir, string name) BuildFileActionResult(Game g, GameAction fileAction)
+    {
+        var exePath = _pathResolver.ExpandPathVariables(g, fileAction.Path) ?? string.Empty;
+        var workDir = _pathResolver.ExpandPathVariables(g, fileAction.WorkingDir);
+        
+        if (string.IsNullOrWhiteSpace(workDir) && !string.IsNullOrWhiteSpace(exePath))
+        {
+            try { workDir = Path.GetDirectoryName(exePath); } 
+            catch (Exception ex) { Logger.Warn(ex, "Failed to get directory name from path."); workDir = null; }
+        }
+        
+        var name = string.IsNullOrEmpty(g.Name) ? (Path.GetFileNameWithoutExtension(exePath) ?? string.Empty) : g.Name;
+        return (exePath, workDir, name);
+    }
+
+    private (string exePath, string? workDir, string name, GameAction? action) BuildUrlActionResult(
+        Game g, 
+        GameAction urlAction, 
+        Dictionary<uint, SteamShortcut> existing,
+        Dictionary<string, uint> byPlayniteId)
+    {
+        var name = string.IsNullOrEmpty(g.Name) ? urlAction.Path : g.Name;
+        
+        // Check if we have an existing shortcut to pull exe info from
         uint resolvedExistingAppId = 0;
         if (byPlayniteId.TryGetValue(g.Id.ToString(), out var mappedAppId) && mappedAppId != 0)
         {
             resolvedExistingAppId = mappedAppId;
         }
-        else if (action.Type == GameActionType.URL)
+        else
         {
-            var maybeAppId = SteamPathResolver.TryParseAppIdFromRungameUrl(action.Path);
+            var maybeAppId = SteamPathResolver.TryParseAppIdFromRungameUrl(urlAction.Path);
             if (maybeAppId != 0)
             {
                 resolvedExistingAppId = maybeAppId;
             }
         }
 
-        if (action.Type == GameActionType.File)
+        // If we have an existing shortcut, use its exe/workdir
+        if (resolvedExistingAppId != 0 && existing.TryGetValue(resolvedExistingAppId, out var prev))
         {
-            exePath = _pathResolver.ExpandPathVariables(g, action.Path) ?? string.Empty;
-            workDir = _pathResolver.ExpandPathVariables(g, action.WorkingDir);
-            if (string.IsNullOrWhiteSpace(workDir) && !string.IsNullOrWhiteSpace(exePath))
-            {
-                try { workDir = Path.GetDirectoryName(exePath); } catch (Exception ex) { Logger.Warn(ex, "Failed to get directory name from path."); workDir = null; }
-            }
-            name = string.IsNullOrEmpty(g.Name) ? (Path.GetFileNameWithoutExtension(exePath) ?? string.Empty) : g.Name;
-        }
-        else if (action.Type == GameActionType.URL)
-        {
-            name = string.IsNullOrEmpty(g.Name) ? action.Path : g.Name;
-            if (resolvedExistingAppId != 0 && existing.TryGetValue(resolvedExistingAppId, out var prev))
-            {
-                exePath = prev.Exe ?? string.Empty;
-                workDir = string.IsNullOrWhiteSpace(prev.StartDir) ? workDir : prev.StartDir;
-            }
-            else
-            {
-                return (string.Empty, null, string.Empty, null);
-            }
-        }
-        else
-        {
-            return (string.Empty, null, string.Empty, null);
+            var exePath = prev.Exe ?? string.Empty;
+            var workDir = string.IsNullOrWhiteSpace(prev.StartDir) ? null : prev.StartDir;
+            return (exePath, workDir, name, urlAction);
         }
 
+        // NEW: Allow URL as the "exe" for Steam shortcuts (double-launcher experience)
+        // Steam can launch URLs directly
+        var url = urlAction.Path ?? string.Empty;
+        if (!string.IsNullOrEmpty(url))
+        {
+            // Use InstallDirectory as working dir if available
+            var workDir = !string.IsNullOrEmpty(g.InstallDirectory) && Directory.Exists(g.InstallDirectory) 
+                ? g.InstallDirectory 
+                : null;
+            
+            Logger.Info($"Creating URL shortcut for '{g.Name}': {url}");
+            return (url, workDir, name, urlAction);
+        }
+
+        return (string.Empty, null, name, null);
+    }
+
+    /// <summary>
+    /// Shows a file browse dialog for the user to select the game executable.
+    /// </summary>
+    private (string? selectedExe, ExeDiscoveryResult result) ShowBrowseForExeDialog(Game game)
+    {
+        try
+        {
+            // Show a message dialog first with Skip/Skip All/Browse options
+            var result = PlayniteApi.Dialogs.ShowMessage(
+                $"Could not automatically detect the executable for \"{game.Name}\".\n\n" +
+                $"Install directory: {game.InstallDirectory}\n\n" +
+                "Would you like to browse for the executable?",
+                Constants.SelectExeDialogTitle,
+                System.Windows.MessageBoxButton.YesNoCancel,
+                System.Windows.MessageBoxImage.Question);
+
+            if (result == System.Windows.MessageBoxResult.Cancel)
+            {
+                // Cancel = Skip All
+                return (null, ExeDiscoveryResult.UserSkippedAll);
+            }
+            
+            if (result == System.Windows.MessageBoxResult.No)
+            {
+                // No = Skip this game
+                return (null, ExeDiscoveryResult.UserSkipped);
+            }
+
+            // Yes = Browse
+            var dialog = new Microsoft.Win32.OpenFileDialog
+            {
+                Title = $"{Constants.SelectExeDialogTitle} - {game.Name}",
+                Filter = Constants.SelectExeDialogFilter,
+                InitialDirectory = game.InstallDirectory
+            };
+
+            if (dialog.ShowDialog() == true && !string.IsNullOrEmpty(dialog.FileName))
+            {
+                return (dialog.FileName, ExeDiscoveryResult.Success);
+            }
+
+            // User cancelled the file dialog
+            return (null, ExeDiscoveryResult.UserSkipped);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex, $"Error showing browse dialog for '{game.Name}'");
+            return (null, ExeDiscoveryResult.NoAction);
+        }
+    }
+
+    /// <summary>
+    /// Creates a new File GameAction and persists it to the game's GameActions.
+    /// </summary>
+    private GameAction CreateAndPersistFileAction(Game game, string exePath)
+    {
+        var action = new GameAction
+        {
+            Name = Constants.PlayDirectActionName,
+            Type = GameActionType.File,
+            Path = exePath,
+            WorkingDir = Path.GetDirectoryName(exePath),
+            IsPlayAction = game.GameActions == null || !game.GameActions.Any(a => a.IsPlayAction)
+        };
+
+        try
+        {
+            var actions = game.GameActions?.ToList() ?? new List<GameAction>();
+            
+            // Insert at beginning so it becomes the primary action
+            actions.Insert(0, action);
+            
+            game.GameActions = new ObservableCollection<GameAction>(actions);
+            PlayniteApi.Database.Games.Update(game);
+            
+            Logger.Info($"Persisted new GameAction for '{game.Name}': {exePath}");
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex, $"Failed to persist GameAction for '{game.Name}'");
+        }
+
+        return action;
+    }
+
+    // Keep the old method signature for backward compatibility with other callers
+    private (string, string?, string, GameAction?) GetGameActionDetails(Game g, Dictionary<uint, SteamShortcut> existing, Dictionary<string, uint> byPlayniteId)
+    {
+        var (exePath, workDir, name, action, _) = GetGameActionDetailsWithFallback(g, existing, byPlayniteId);
         return (exePath, workDir, name, action);
     }
 
@@ -1275,8 +1551,8 @@ public class ShortcutsLibrary : LibraryPlugin
 
     private void WriteShortcutsWithBackup(string vdfPath, List<SteamShortcut> shortcuts)
     {
-        // Check if Steam is running and warn user
-        if (SteamProcessHelper.IsSteamRunning())
+        // Check if Steam is running and warn user (skip if already checked in this batch)
+        if (!_steamCheckPerformed && SteamProcessHelper.IsSteamRunning())
         {
             var result = PlayniteApi.Dialogs.ShowMessage(
                 SteamProcessHelper.GetSteamRunningWarning(),
@@ -1293,6 +1569,9 @@ public class ShortcutsLibrary : LibraryPlugin
             
             Logger.Warn("User proceeded with VDF write despite Steam running.");
         }
+
+        // Reset flag after write operation
+        _steamCheckPerformed = false;
 
         try
         {
