@@ -764,11 +764,51 @@ public class ShortcutsLibrary : LibraryPlugin
     // Tracks "Skip All" state during batch export
     private bool _skipAllRemaining = false;
 
+    // Tracks whether Steam check was already performed for the current batch
+    private bool _steamCheckPerformed = false;
+
+    /// <summary>
+    /// Checks if Steam is running and prompts the user to confirm proceeding.
+    /// Returns true if we should proceed, false if user cancelled.
+    /// </summary>
+    private bool CheckSteamRunningAndConfirm()
+    {
+        _steamCheckPerformed = true;
+        
+        if (!SteamProcessHelper.IsSteamRunning())
+        {
+            return true;
+        }
+
+        var result = PlayniteApi.Dialogs.ShowMessage(
+            SteamProcessHelper.GetSteamRunningWarning(),
+            Name,
+            System.Windows.MessageBoxButton.YesNo,
+            System.Windows.MessageBoxImage.Warning
+        );
+        
+        if (result == System.Windows.MessageBoxResult.No)
+        {
+            return false;
+        }
+        
+        Logger.Warn("User proceeded with export despite Steam running.");
+        return true;
+    }
+
     private ExportResult AddGamesToSteamCore(IEnumerable<Game> games)
     {
         var vdfPath = _pathResolver.ResolveShortcutsVdfPath();
         if (string.IsNullOrWhiteSpace(vdfPath))
         {
+            return new ExportResult();
+        }
+
+        // Check if Steam is running BEFORE processing any games (and showing browse dialogs)
+        if (!CheckSteamRunningAndConfirm())
+        {
+            Logger.Info("User cancelled export due to Steam running.");
+            _steamCheckPerformed = false; // Reset for next operation
             return new ExportResult();
         }
 
@@ -1511,8 +1551,8 @@ public class ShortcutsLibrary : LibraryPlugin
 
     private void WriteShortcutsWithBackup(string vdfPath, List<SteamShortcut> shortcuts)
     {
-        // Check if Steam is running and warn user
-        if (SteamProcessHelper.IsSteamRunning())
+        // Check if Steam is running and warn user (skip if already checked in this batch)
+        if (!_steamCheckPerformed && SteamProcessHelper.IsSteamRunning())
         {
             var result = PlayniteApi.Dialogs.ShowMessage(
                 SteamProcessHelper.GetSteamRunningWarning(),
@@ -1529,6 +1569,9 @@ public class ShortcutsLibrary : LibraryPlugin
             
             Logger.Warn("User proceeded with VDF write despite Steam running.");
         }
+
+        // Reset flag after write operation
+        _steamCheckPerformed = false;
 
         try
         {
