@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using Playnite.SDK.Models;
 using Xunit;
@@ -287,4 +288,365 @@ public class SteamPathResolverTests
         // Verify high bit is set (Steam shortcut marker)
         Assert.True((appId & 0x80000000u) != 0);
     }
+
+    #region Executable Discovery Tests
+
+    [Fact]
+    public void ScanForExecutables_FindsExesInRootDir()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "exe_test_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(tempDir);
+            File.WriteAllText(Path.Combine(tempDir, "game.exe"), "test");
+            File.WriteAllText(Path.Combine(tempDir, "other.exe"), "test");
+
+            var resolver = new SteamPathResolver(null);
+            var results = resolver.ScanForExecutables(tempDir);
+
+            Assert.Equal(2, results.Count);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+                Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ScanForExecutables_FiltersExcludedPatterns()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "exe_test_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(tempDir);
+            File.WriteAllText(Path.Combine(tempDir, "game.exe"), "test");
+            File.WriteAllText(Path.Combine(tempDir, "uninstall.exe"), "test");
+            File.WriteAllText(Path.Combine(tempDir, "UnityCrashHandler64.exe"), "test");
+            File.WriteAllText(Path.Combine(tempDir, "setup.exe"), "test");
+
+            var resolver = new SteamPathResolver(null);
+            var results = resolver.ScanForExecutables(tempDir);
+
+            Assert.Single(results);
+            Assert.Contains("game.exe", results[0]);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+                Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ScanForExecutables_ScansSubdirectories()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "exe_test_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(tempDir);
+            var binDir = Path.Combine(tempDir, "bin");
+            Directory.CreateDirectory(binDir);
+            File.WriteAllText(Path.Combine(binDir, "game.exe"), "test");
+
+            var resolver = new SteamPathResolver(null);
+            var results = resolver.ScanForExecutables(tempDir, maxDepth: 2);
+
+            Assert.Single(results);
+            Assert.Contains("game.exe", results[0]);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+                Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ScanForExecutables_RespectsMaxDepth()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "exe_test_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(tempDir);
+            var deepDir = Path.Combine(tempDir, "level1", "level2", "level3");
+            Directory.CreateDirectory(deepDir);
+            File.WriteAllText(Path.Combine(deepDir, "game.exe"), "test");
+
+            var resolver = new SteamPathResolver(null);
+            var results = resolver.ScanForExecutables(tempDir, maxDepth: 2);
+
+            // Should not find exe at depth 3
+            Assert.Empty(results);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+                Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ScanForExecutables_SkipsExcludedDirectories()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "exe_test_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(tempDir);
+            var redistDir = Path.Combine(tempDir, "redist");
+            Directory.CreateDirectory(redistDir);
+            File.WriteAllText(Path.Combine(redistDir, "vcredist_x64.exe"), "test");
+            File.WriteAllText(Path.Combine(tempDir, "game.exe"), "test");
+
+            var resolver = new SteamPathResolver(null);
+            var results = resolver.ScanForExecutables(tempDir);
+
+            Assert.Single(results);
+            Assert.Contains("game.exe", results[0]);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+                Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void SelectBestExecutable_PrefersNameMatch()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "exe_test_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(tempDir);
+            var candidates = new List<string>
+            {
+                Path.Combine(tempDir, "other.exe"),
+                Path.Combine(tempDir, "MyGame.exe"),
+                Path.Combine(tempDir, "launcher.exe")
+            };
+            foreach (var c in candidates)
+                File.WriteAllText(c, "test");
+
+            var resolver = new SteamPathResolver(null);
+            var result = resolver.SelectBestExecutable(candidates, "My Game", tempDir);
+
+            Assert.NotNull(result);
+            Assert.Contains("MyGame.exe", result);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+                Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void SelectBestExecutable_ReturnsNullWhenAmbiguous()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "exe_test_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(tempDir);
+            var candidates = new List<string>
+            {
+                Path.Combine(tempDir, "foo.exe"),
+                Path.Combine(tempDir, "bar.exe"),
+                Path.Combine(tempDir, "baz.exe")
+            };
+            foreach (var c in candidates)
+                File.WriteAllText(c, "test");
+
+            var resolver = new SteamPathResolver(null);
+            var result = resolver.SelectBestExecutable(candidates, "Completely Different Name", tempDir);
+
+            Assert.Null(result);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+                Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void TryParseGogManifest_ValidManifest_ReturnsExePath()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "gog_test_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(tempDir);
+            
+            // Create a mock GOG manifest
+            var manifestContent = @"{
+                ""gameId"": ""1234567890"",
+                ""name"": ""Test Game"",
+                ""playTasks"": [{
+                    ""isPrimary"": true,
+                    ""path"": ""game.exe"",
+                    ""type"": ""FileTask""
+                }]
+            }";
+            File.WriteAllText(Path.Combine(tempDir, "goggame-1234567890.info"), manifestContent);
+            File.WriteAllText(Path.Combine(tempDir, "game.exe"), "test");
+
+            var resolver = new SteamPathResolver(null);
+            var result = resolver.TryParseGogManifest(tempDir, "1234567890");
+
+            Assert.NotNull(result);
+            Assert.Contains("game.exe", result);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+                Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void TryParseGogManifest_MissingManifest_ReturnsNull()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "gog_test_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(tempDir);
+
+            var resolver = new SteamPathResolver(null);
+            var result = resolver.TryParseGogManifest(tempDir, "1234567890");
+
+            Assert.Null(result);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+                Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void TryParseGogManifest_ExeNotFound_ReturnsNull()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "gog_test_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(tempDir);
+            
+            // Create manifest but no exe
+            var manifestContent = @"{
+                ""playTasks"": [{
+                    ""path"": ""nonexistent.exe""
+                }]
+            }";
+            File.WriteAllText(Path.Combine(tempDir, "goggame-123.info"), manifestContent);
+
+            var resolver = new SteamPathResolver(null);
+            var result = resolver.TryParseGogManifest(tempDir, "123");
+
+            Assert.Null(result);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+                Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void TryDiscoverExecutable_NoInstallDir_ReturnsNull()
+    {
+        var game = new Game("Test Game")
+        {
+            InstallDirectory = null
+        };
+
+        var resolver = new SteamPathResolver(null);
+        var result = resolver.TryDiscoverExecutable(game);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void TryDiscoverExecutable_SingleExe_AutoSelects()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "exe_test_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(tempDir);
+            File.WriteAllText(Path.Combine(tempDir, "game.exe"), "test");
+
+            var game = new Game("Test Game")
+            {
+                InstallDirectory = tempDir
+            };
+
+            var resolver = new SteamPathResolver(null);
+            var result = resolver.TryDiscoverExecutable(game);
+
+            Assert.NotNull(result);
+            Assert.Contains("game.exe", result);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+                Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void TryDiscoverExecutable_MultipleExesWithNameMatch_AutoSelects()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "exe_test_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(tempDir);
+            File.WriteAllText(Path.Combine(tempDir, "TestGame.exe"), "test");
+            File.WriteAllText(Path.Combine(tempDir, "other.exe"), "test");
+
+            var game = new Game("Test Game")
+            {
+                InstallDirectory = tempDir
+            };
+
+            var resolver = new SteamPathResolver(null);
+            var result = resolver.TryDiscoverExecutable(game);
+
+            Assert.NotNull(result);
+            Assert.Contains("TestGame.exe", result);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+                Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void TryDiscoverExecutable_AmbiguousExes_ReturnsNull()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "exe_test_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(tempDir);
+            File.WriteAllText(Path.Combine(tempDir, "foo.exe"), "test");
+            File.WriteAllText(Path.Combine(tempDir, "bar.exe"), "test");
+            File.WriteAllText(Path.Combine(tempDir, "baz.exe"), "test");
+
+            var game = new Game("Completely Different Name")
+            {
+                InstallDirectory = tempDir
+            };
+
+            var resolver = new SteamPathResolver(null);
+            var result = resolver.TryDiscoverExecutable(game);
+
+            // Should return null because no clear match
+            Assert.Null(result);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+                Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    #endregion
 }
