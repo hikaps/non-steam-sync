@@ -21,3 +21,36 @@
 ## Architecture Notes
 - Plugin targets .NET Framework 4.6.2 (Playnite SDK requirement); tests run on .NET 6.0
 - Constants go in `Constants.cs`; avoid magic strings in logic files
+
+## Releasing
+
+When creating a new release, follow these steps **in order**:
+
+1. **Update version in manifests** (before tagging):
+   - `src/SteamShortcutsImporter/extension.yaml` — update `Version: X.Y.Z`
+   - `manifests/installer.yaml` — add new package entry at the top with:
+     - Version, ReleaseDate, PackageUrl, Changelog
+
+2. **Commit manifest updates** to `develop`, then merge to `main`
+
+3. **Create and push tag** to trigger release workflow:
+   ```bash
+   git tag -a vX.Y.Z -m "vX.Y.Z"
+   git push origin vX.Y.Z
+   ```
+
+4. **Verify** the release workflow completes and `.pext` is attached to the GitHub release
+
+5. **Update release notes** on GitHub with proper markdown:
+   ```bash
+   gh release edit vX.Y.Z --notes "## What's New
+
+   ### Features
+   - Feature 1
+   - Feature 2
+
+   ### Bug Fixes
+   - Fix 1
+
+   **Full Changelog**: https://github.com/hikaps/non-steam-sync/compare/vPREV...vX.Y.Z"
+   ```
