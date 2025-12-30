@@ -94,4 +94,17 @@ internal static class Constants
 
     // Source property for imported games
     public const string SteamShortcutsSourceName = "Steam Shortcuts";
+
+    // Executable discovery UI
+    public const string SelectExeDialogTitle = "Select Game Executable";
+    public const string SelectExeDialogFilter = "Executable files (*.exe)|*.exe|All files (*.*)|*.*";
+    public const string SkipButtonLabel = "Skip";
+    public const string SkipAllButtonLabel = "Skip All";
+    public const string SelectButtonLabel = "Select";
+
+    // Export skip reasons (for logging and UI)
+    public const string SkipReasonNoExecutable = "No executable found";
+    public const string SkipReasonNoInstallDir = "No install directory";
+    public const string SkipReasonUserSkipped = "Skipped by user";
+    public const string SkipReasonEmulator = "Emulator-based games not supported";
 }
