@@ -587,7 +587,12 @@ public class ShortcutsLibrary : LibraryPlugin
                 {
                     var res = AddGamesToSteamCore(selectedGames);
                     var msg = $"Steam shortcuts updated. Created: {res.Added}, Updated: {res.Updated}, Skipped: {res.Skipped}.";
-                    PlayniteApi.Dialogs.ShowMessage(msg, Name);
+                    var (okClicked, restartSteam) = ExportCompletionDialog.Show(PlayniteApi, msg, Settings.SteamRootPath);
+                    if (restartSteam)
+                    {
+                        var launchAttempted = SteamProcessHelper.TryLaunchSteam(Settings.SteamRootPath);
+                        Logger.Info($"Steam restart requested; launch attempt: {launchAttempted}");
+                    }
                 });
         }
         catch (Exception ex)
