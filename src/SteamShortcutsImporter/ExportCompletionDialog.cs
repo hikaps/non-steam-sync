@@ -23,11 +23,14 @@ public static class ExportCompletionDialog
 
         var mainPanel = new StackPanel { Margin = new Thickness(20) };
 
+        bool steamIsRunning = SteamProcessHelper.IsSteamRunning();
+        string displayMessage = steamIsRunning ? message + " (Steam is currently running)" : message;
+
         var textBlock = new TextBlock
         {
-            Text = message,
+            Text = displayMessage,
             TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 0, 0, 20),
+            Margin = new Thickness(0, 0, 0, 5),
             Foreground = Brushes.White,
             FontSize = 14
         };
@@ -35,8 +38,8 @@ public static class ExportCompletionDialog
 
         var restartCheck = new CheckBox
         {
-            Content = "Restart Steam after sync?",
-            Margin = new Thickness(0, 0, 0, 20),
+            Content = steamIsRunning ? "Launch Steam again?" : "Restart Steam after sync?",
+            Margin = new Thickness(0, 5, 0, 0),
             Foreground = Brushes.White,
             FontSize = 14
         };
@@ -61,7 +64,7 @@ public static class ExportCompletionDialog
         {
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, 10, 0, 0)
+            Margin = new Thickness(0, 5, 0, 0)
         };
 
         var okButton = new Button
