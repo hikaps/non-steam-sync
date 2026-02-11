@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 
 namespace SteamShortcutsImporter;
@@ -54,5 +55,45 @@ internal static class SteamProcessHelper
                "• Data corruption if Steam reads the file during write\n\n" +
                "Recommendation: Close Steam completely before proceeding.\n\n" +
                "Do you want to continue anyway?";
+    }
+
+    /// <summary>
+    /// Attempts to launch Steam on Windows.
+    /// </summary>
+    /// <param name="steamRootPath">Path to the Steam root folder.</param>
+    /// <returns>True if launch was attempted successfully, false if failed or not on Windows.</returns>
+    public static bool TryLaunchSteam(string? steamRootPath)
+    {
+        if (Environment.OSVersion.Platform != PlatformID.Win32NT)
+        {
+            Playnite.SDK.LogManager.GetLogger().Info("Steam launch is only supported on Windows.");
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(steamRootPath))
+        {
+            Playnite.SDK.LogManager.GetLogger().Warn("Cannot launch Steam: Steam root path is null or empty.");
+            return false;
+        }
+
+        try
+        {
+            var steamExePath = Path.Combine(steamRootPath, "Steam.exe");
+            
+            if (!File.Exists(steamExePath))
+            {
+                Playnite.SDK.LogManager.GetLogger().Warn($"Cannot launch Steam: Steam.exe not found at {steamExePath}");
+                return false;
+            }
+
+            Process.Start(steamExePath);
+            Playnite.SDK.LogManager.GetLogger().Info($"Launched Steam from {steamExePath}");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Playnite.SDK.LogManager.GetLogger().Error(ex, "Failed to launch Steam.");
+            return false;
+        }
     }
 }
