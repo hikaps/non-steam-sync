@@ -24,13 +24,24 @@ internal static class SteamProcessHelper
             foreach (var name in processNames)
             {
                 var processes = Process.GetProcessesByName(name);
-                if (processes.Any())
+                try
                 {
+                    if (processes.Any())
+                    {
+                        foreach (var p in processes)
+                        {
+                            p.Dispose();
+                        }
+                        return true;
+                    }
+                }
+                finally
+                {
+                    // Ensure array is always disposed, even if empty
                     foreach (var p in processes)
                     {
                         p.Dispose();
                     }
-                    return true;
                 }
             }
             

@@ -14,12 +14,12 @@ public static class ExportCompletionDialog
     {
         var window = api.Dialogs.CreateWindow(new WindowCreationOptions { ShowCloseButton = true });
         window.Title = "Export Complete";
-        window.Width = 450;
-        window.Height = 180;
+        window.Width = 500;
+        window.SizeToContent = SizeToContent.Height;
         window.ResizeMode = ResizeMode.NoResize;
         window.WindowStartupLocation = WindowStartupLocation.CenterScreen;
 
-        var mainPanel = new StackPanel { Margin = new Thickness(20, 20, 20, 0) };
+        var mainPanel = new StackPanel { Margin = new Thickness(20) };
 
         var textBlock = new TextBlock
         {
