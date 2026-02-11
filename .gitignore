@@ -18,3 +18,5 @@ artifact/
 
 # Logs
 *.log
+
+.sisyphus/
