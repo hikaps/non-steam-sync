@@ -15,11 +15,11 @@ public static class ExportCompletionDialog
         var window = api.Dialogs.CreateWindow(new WindowCreationOptions { ShowCloseButton = true });
         window.Title = "Export Complete";
         window.Width = 450;
-        window.Height = 200;
+        window.Height = 180;
         window.ResizeMode = ResizeMode.NoResize;
         window.WindowStartupLocation = WindowStartupLocation.CenterScreen;
 
-        var mainPanel = new StackPanel { Margin = new Thickness(20) };
+        var mainPanel = new StackPanel { Margin = new Thickness(20, 20, 20, 0) };
 
         var textBlock = new TextBlock
         {
@@ -34,7 +34,7 @@ public static class ExportCompletionDialog
         var restartCheck = new CheckBox
         {
             Content = "Restart Steam?",
-            Margin = new Thickness(0, 0, 0, 15),
+            Margin = new Thickness(0, 0, 0, 10),
             Foreground = Brushes.White,
             FontSize = 14
         };
@@ -44,7 +44,7 @@ public static class ExportCompletionDialog
         {
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, 0, 0, 0)
+            Margin = new Thickness(0, 10, 0, 0)
         };
 
         var okButton = new Button
