@@ -58,123 +58,79 @@ internal static class SteamProcessHelper
     }
 
     /// <summary>
-    /// Attempts to gracefully close Steam if running using the -shutdown command.
-    /// Falls back to force-killing if graceful shutdown fails.
+    /// Attempts to close Steam using the Windows taskkill command.
     /// </summary>
-    /// <returns>True if close was attempted (gracefully or forcefully), false otherwise.</returns>
+    /// <returns>True if taskkill command executed successfully and Steam is no longer running, false otherwise.</returns>
     public static bool TryCloseSteam()
     {
         try
         {
             var logger = Playnite.SDK.LogManager.GetLogger();
             
-            // Find main steam.exe process (not steamwebhelper or other child processes)
-            var mainSteamProcess = Process.GetProcessesByName("steam")
-                .FirstOrDefault(p => p.MainModule?.FileName?.EndsWith("steam.exe", StringComparison.OrdinalIgnoreCase) == true);
-            
-            if (mainSteamProcess == null)
-            {
-                // Try capitalized variant
-                mainSteamProcess = Process.GetProcessesByName("Steam")
-                    .FirstOrDefault(p => p.MainModule?.FileName?.EndsWith("steam.exe", StringComparison.OrdinalIgnoreCase) == true);
-            }
-            
-            if (mainSteamProcess == null)
+            // Check if Steam is running first
+            if (!IsSteamRunning())
             {
                 logger.Info("Steam is not running, nothing to close.");
                 return false;
             }
 
-            try
+            // Use Windows taskkill command to force-close Steam
+            logger.Info("Closing Steam using taskkill /F /IM Steam.exe");
+            
+            var processStartInfo = new ProcessStartInfo
             {
-                // Get Steam.exe path from the running process
-                string steamExePath = mainSteamProcess.MainModule?.FileName ?? string.Empty;
-                
-                if (string.IsNullOrWhiteSpace(steamExePath))
+                FileName = "taskkill",
+                Arguments = "/F /IM Steam.exe",
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            };
+
+            using (var process = Process.Start(processStartInfo))
+            {
+                if (process == null)
                 {
-                    logger.Warn("Could not determine Steam.exe path from process.");
+                    logger.Warn("Failed to start taskkill process");
                     return false;
                 }
 
-                // Step 1: Try graceful shutdown with -shutdown command
-                logger.Info($"Attempting graceful shutdown via -shutdown at {steamExePath}");
-                try
+                process.WaitForExit(5000); // Wait up to 5 seconds
+                
+                var output = process.StandardOutput.ReadToEnd();
+                var error = process.StandardError.ReadToEnd();
+                
+                if (!string.IsNullOrWhiteSpace(output))
                 {
-                    Process.Start(new ProcessStartInfo
-                    {
-                        FileName = steamExePath,
-                        Arguments = "-shutdown",
-                        UseShellExecute = false,
-                        CreateNoWindow = true
-                    });
-                }
-                catch (Exception ex)
-                {
-                    logger.Warn(ex, "Failed to execute -shutdown command, will attempt force-kill");
+                    logger.Info($"taskkill output: {output}");
                 }
                 
-                // Step 2: Poll for up to 15 seconds to see if Steam gracefully shut down
-                int maxAttempts = 15;
-                for (int i = 0; i < maxAttempts; i++)
+                if (!string.IsNullOrWhiteSpace(error))
                 {
-                    System.Threading.Thread.Sleep(1000);
-                    
-                    if (!IsSteamRunning())
-                    {
-                        logger.Info($"Steam closed successfully after {i + 1} seconds");
-                        return true;
-                    }
+                    logger.Warn($"taskkill error: {error}");
                 }
                 
-                // Step 3: If graceful shutdown didn't work, force-kill all Steam processes
-                logger.Warn("Graceful shutdown failed, force-killing Steam processes");
-                var allSteamProcesses = Process.GetProcessesByName("steam")
-                    .Concat(Process.GetProcessesByName("Steam"))
-                    .Concat(Process.GetProcessesByName("steamwebhelper"))
-                    .Concat(Process.GetProcessesByName("SteamWebHelper"))
-                    .ToList();
-                
-                foreach (var p in allSteamProcesses)
-                {
-                    try
-                    {
-                        p.Kill();
-                        p.WaitForExit(2000);
-                        logger.Info($"Force-killed Steam process {p.Id}");
-                    }
-                    catch (Exception ex)
-                    {
-                        logger.Warn(ex, $"Failed to kill Steam process {p.Id}");
-                    }
-                    finally
-                    {
-                        p.Dispose();
-                    }
-                }
-                
-                // Give the system a moment to clean up killed processes
-                System.Threading.Thread.Sleep(2000);
-                
-                // Verify final state
-                if (IsSteamRunning())
-                {
-                    logger.Warn("Steam processes still running even after force-kill attempt");
-                }
-                else
-                {
-                    logger.Info("All Steam processes killed successfully");
-                }
-                
-                return true;
+                logger.Info($"taskkill exit code: {process.ExitCode}");
             }
-            finally
+            
+            // Give Windows a moment to clean up the process
+            System.Threading.Thread.Sleep(2000);
+            
+            // Verify Steam closed
+            if (IsSteamRunning())
             {
-                mainSteamProcess.Dispose();
+                logger.Warn("Steam still running after taskkill");
+                return false;
+            }
+            else
+            {
+                logger.Info("Steam closed successfully");
+                return true;
             }
         }
         catch (Exception ex)
         {
-            Playnite.SDK.LogManager.GetLogger().Warn(ex, "Failed to close Steam.");
+            Playnite.SDK.LogManager.GetLogger().Warn(ex, "Failed to close Steam using taskkill");
             return false;
         }
     }
