@@ -31,28 +31,32 @@ public static class ExportCompletionDialog
         };
         mainPanel.Children.Add(textBlock);
 
+        var actionPanel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Margin = new Thickness(0, 15, 0, 0),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+
         var restartCheck = new CheckBox
         {
             Content = "Restart Steam?",
-            Margin = new Thickness(0, 0, 0, 10),
+            Margin = new Thickness(0, 0, 15, 0),
             Foreground = Brushes.White,
-            FontSize = 14
+            FontSize = 14,
+            VerticalAlignment = VerticalAlignment.Center
         };
-        mainPanel.Children.Add(restartCheck);
-
-        var buttonPanel = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, 10, 0, 0)
-        };
+        actionPanel.Children.Add(restartCheck);
 
         var okButton = new Button
         {
             Content = "OK",
             Width = 80,
             Height = 30,
-            IsDefault = true
+            IsDefault = true,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Center
         };
 
         okButton.Click += (s, e) =>
@@ -61,8 +65,8 @@ public static class ExportCompletionDialog
             window.Close();
         };
 
-        buttonPanel.Children.Add(okButton);
-        mainPanel.Children.Add(buttonPanel);
+        actionPanel.Children.Add(okButton);
+        mainPanel.Children.Add(actionPanel);
 
         window.Content = mainPanel;
 
