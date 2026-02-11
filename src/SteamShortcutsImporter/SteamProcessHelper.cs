@@ -58,6 +58,67 @@ internal static class SteamProcessHelper
     }
 
     /// <summary>
+    /// Attempts to gracefully close Steam if running.
+    /// </summary>
+    /// <returns>True if Steam was found and close was attempted, false otherwise.</returns>
+    public static bool TryCloseSteam()
+    {
+        try
+        {
+            // Check for common Steam process names across platforms
+            var processNames = new[] { "steam", "Steam" };
+            
+            foreach (var name in processNames)
+            {
+                var processes = Process.GetProcessesByName(name);
+                if (processes.Any())
+                {
+                    foreach (var p in processes)
+                    {
+                        try
+                        {
+                            // Gracefully close the main window
+                            if (!p.CloseMainWindow())
+                            {
+                                Playnite.SDK.LogManager.GetLogger().Warn($"Failed to close Steam main window for process {p.Id}");
+                            }
+                            else
+                            {
+                                Playnite.SDK.LogManager.GetLogger().Info($"Sent close signal to Steam process {p.Id}");
+                            }
+                            
+                            // Wait for the process to exit with a timeout
+                            if (!p.WaitForExit(5000)) // 5 second timeout
+                            {
+                                Playnite.SDK.LogManager.GetLogger().Warn($"Steam process {p.Id} did not exit within timeout.");
+                            }
+                            else
+                            {
+                                Playnite.SDK.LogManager.GetLogger().Info($"Steam process {p.Id} exited gracefully.");
+                            }
+                        }
+                        finally
+                        {
+                            p.Dispose();
+                        }
+                    }
+                    
+                    return true;
+                }
+            }
+            
+            // Steam not running
+            Playnite.SDK.LogManager.GetLogger().Info("Steam is not running, nothing to close.");
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Playnite.SDK.LogManager.GetLogger().Warn(ex, "Failed to close Steam.");
+            return false;
+        }
+    }
+
+    /// <summary>
     /// Attempts to launch Steam on Windows.
     /// </summary>
     /// <param name="steamRootPath">Path to the Steam root folder.</param>

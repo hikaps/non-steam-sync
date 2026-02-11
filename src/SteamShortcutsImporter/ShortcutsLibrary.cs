@@ -590,6 +590,11 @@ public class ShortcutsLibrary : LibraryPlugin
                     var (okClicked, restartSteam) = ExportCompletionDialog.Show(PlayniteApi, msg);
                     if (restartSteam)
                     {
+                        if (SteamProcessHelper.IsSteamRunning())
+                        {
+                            Logger.Info("Steam is running, closing before restart...");
+                            SteamProcessHelper.TryCloseSteam();
+                        }
                         var launchAttempted = SteamProcessHelper.TryLaunchSteam(Settings.SteamRootPath);
                         Logger.Info($"Steam restart requested; launch attempt: {launchAttempted}");
                     }
@@ -763,6 +768,11 @@ public class ShortcutsLibrary : LibraryPlugin
         var (okClicked, restartSteam) = ExportCompletionDialog.Show(PlayniteApi, msg);
         if (restartSteam)
         {
+            if (SteamProcessHelper.IsSteamRunning())
+            {
+                Logger.Info("Steam is running, closing before restart...");
+                SteamProcessHelper.TryCloseSteam();
+            }
             var launchAttempted = SteamProcessHelper.TryLaunchSteam(Settings.SteamRootPath);
             Logger.Info($"Steam restart requested; launch attempt: {launchAttempted}");
         }
