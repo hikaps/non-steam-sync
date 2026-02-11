@@ -44,7 +44,7 @@ public static class ExportCompletionDialog
         {
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, 5, 0, 0)
+            Margin = new Thickness(0, 0, 0, 0)
         };
 
         var okButton = new Button
