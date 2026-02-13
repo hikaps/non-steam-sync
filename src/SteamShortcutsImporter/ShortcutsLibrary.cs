@@ -804,7 +804,7 @@ public class ShortcutsLibrary : LibraryPlugin
     /// Checks if Steam is running and prompts the user to confirm proceeding.
     /// Returns true if we should proceed, false if user cancelled.
     /// </summary>
-    private bool CheckSteamRunningAndConfirm()
+    private bool CheckSteamAndCloseIfNeeded()
     {
         if (!SteamProcessHelper.IsSteamRunning())
         {
@@ -836,7 +836,7 @@ public class ShortcutsLibrary : LibraryPlugin
         }
 
         // Check if Steam is running BEFORE processing any games (and showing browse dialogs)
-        if (!CheckSteamRunningAndConfirm())
+        if (!CheckSteamAndCloseIfNeeded())
         {
             Logger.Info("User cancelled export due to Steam running.");
             return new ExportResult();
