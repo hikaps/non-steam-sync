@@ -587,7 +587,17 @@ public class ShortcutsLibrary : LibraryPlugin
                 {
                     var res = AddGamesToSteamCore(selectedGames);
                     var msg = $"Steam shortcuts updated. Created: {res.Added}, Updated: {res.Updated}, Skipped: {res.Skipped}.";
-                    PlayniteApi.Dialogs.ShowMessage(msg, Name);
+                    var (okClicked, restartSteam) = ExportCompletionDialog.Show(PlayniteApi, msg);
+                    if (restartSteam)
+                    {
+                        if (SteamProcessHelper.IsSteamRunning())
+                        {
+                            Logger.Info("Steam is running, closing before restart...");
+                            SteamProcessHelper.TryCloseSteam();
+                        }
+                        var launchAttempted = SteamProcessHelper.TryLaunchSteam(Settings.SteamRootPath);
+                        Logger.Info($"Steam restart requested; launch attempt: {launchAttempted}");
+                    }
                 });
         }
         catch (Exception ex)
@@ -755,7 +765,17 @@ public class ShortcutsLibrary : LibraryPlugin
             }
         }
         
-        PlayniteApi.Dialogs.ShowMessage(msg, Name);
+        var (okClicked, restartSteam) = ExportCompletionDialog.Show(PlayniteApi, msg);
+        if (restartSteam)
+        {
+            if (SteamProcessHelper.IsSteamRunning())
+            {
+                Logger.Info("Steam is running, closing before restart...");
+                SteamProcessHelper.TryCloseSteam();
+            }
+            var launchAttempted = SteamProcessHelper.TryLaunchSteam(Settings.SteamRootPath);
+            Logger.Info($"Steam restart requested; launch attempt: {launchAttempted}");
+        }
     }
 
     private sealed class ExportResult 
@@ -780,17 +800,12 @@ public class ShortcutsLibrary : LibraryPlugin
     // Tracks "Skip All" state during batch export
     private bool _skipAllRemaining = false;
 
-    // Tracks whether Steam check was already performed for the current batch
-    private bool _steamCheckPerformed = false;
-
     /// <summary>
     /// Checks if Steam is running and prompts the user to confirm proceeding.
     /// Returns true if we should proceed, false if user cancelled.
     /// </summary>
-    private bool CheckSteamRunningAndConfirm()
+    private bool CheckSteamAndCloseIfNeeded()
     {
-        _steamCheckPerformed = true;
-        
         if (!SteamProcessHelper.IsSteamRunning())
         {
             return true;
@@ -821,10 +836,9 @@ public class ShortcutsLibrary : LibraryPlugin
         }
 
         // Check if Steam is running BEFORE processing any games (and showing browse dialogs)
-        if (!CheckSteamRunningAndConfirm())
+        if (!CheckSteamAndCloseIfNeeded())
         {
             Logger.Info("User cancelled export due to Steam running.");
-            _steamCheckPerformed = false; // Reset for next operation
             return new ExportResult();
         }
 
@@ -1567,28 +1581,6 @@ public class ShortcutsLibrary : LibraryPlugin
 
     private void WriteShortcutsWithBackup(string vdfPath, List<SteamShortcut> shortcuts)
     {
-        // Check if Steam is running and warn user (skip if already checked in this batch)
-        if (!_steamCheckPerformed && SteamProcessHelper.IsSteamRunning())
-        {
-            var result = PlayniteApi.Dialogs.ShowMessage(
-                SteamProcessHelper.GetSteamRunningWarning(),
-                Name,
-                System.Windows.MessageBoxButton.YesNo,
-                System.Windows.MessageBoxImage.Warning
-            );
-            
-            if (result == System.Windows.MessageBoxResult.No)
-            {
-                Logger.Info("User cancelled VDF write due to Steam running.");
-                return;
-            }
-            
-            Logger.Warn("User proceeded with VDF write despite Steam running.");
-        }
-
-        // Reset flag after write operation
-        _steamCheckPerformed = false;
-
         try
         {
             var userId = TryGetSteamUserFromPath(vdfPath) ?? Constants.DefaultUserSegment;
