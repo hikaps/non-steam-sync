@@ -31,22 +31,20 @@ public static class ExportCompletionDialog
         };
         mainPanel.Children.Add(textBlock);
 
-        var actionPanel = new StackPanel
+        var actionPanel = new DockPanel
         {
-            Orientation = Orientation.Horizontal,
             Margin = new Thickness(0, 15, 0, 0),
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            VerticalAlignment = VerticalAlignment.Center
+            LastChildFill = false
         };
 
         var restartCheck = new CheckBox
         {
             Content = "Restart Steam?",
-            Margin = new Thickness(0, 0, 15, 0),
             Foreground = Brushes.White,
             FontSize = 14,
             VerticalAlignment = VerticalAlignment.Center
         };
+        DockPanel.SetDock(restartCheck, Dock.Left);
         actionPanel.Children.Add(restartCheck);
 
         var okButton = new Button
@@ -55,9 +53,9 @@ public static class ExportCompletionDialog
             Width = 80,
             Height = 30,
             IsDefault = true,
-            HorizontalAlignment = HorizontalAlignment.Right,
             VerticalAlignment = VerticalAlignment.Center
         };
+        DockPanel.SetDock(okButton, Dock.Right);
 
         okButton.Click += (s, e) =>
         {
