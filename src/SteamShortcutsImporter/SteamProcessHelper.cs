@@ -26,14 +26,10 @@ internal static class SteamProcessHelper
                 var processes = Process.GetProcessesByName(name);
                 try
                 {
-                    if (processes.Any())
-                    {
-                        foreach (var p in processes)
+if (processes.Any())
                         {
-                            p.Dispose();
+                            return true;
                         }
-                        return true;
-                    }
                 }
                 finally
                 {
@@ -60,9 +56,12 @@ internal static class SteamProcessHelper
     /// </summary>
     public static string GetSteamRunningWarning()
     {
-        return "Steam is running. Syncing while Steam is open may cause issues.\n\n" +
-               "You can restart Steam after the sync completes.\n\n" +
-               "Continue anyway?";
+        return "Steam is currently running. Writing to shortcuts.vdf while Steam is open may cause:\n\n" +
+               "• Steam to overwrite your changes when it exits\n" +
+               "• File lock errors preventing the write\n" +
+               "• Data corruption if Steam reads the file during write\n\n" +
+               "Recommendation: Close Steam completely before proceeding.\n\n" +
+               "Do you want to continue anyway?";
     }
 
     /// <summary>

@@ -10,6 +10,23 @@ namespace SteamShortcutsImporter;
 /// </summary>
 public static class ExportCompletionDialog
 {
+    // Playnite theme resource key for text foreground color
+    private const string TextBrushKey = "TextBrush";
+
+    /// <summary>
+    /// Gets a theme-aware brush for text, falling back to system colors if Playnite theme is unavailable.
+    /// </summary>
+    private static Brush GetThemeAwareTextBrush()
+    {
+        // Try to get Playnite's theme text brush
+        if (Application.Current?.TryFindResource(TextBrushKey) is Brush themeBrush)
+        {
+            return themeBrush;
+        }
+        // Fallback to system control text color (adapts to OS theme)
+        return SystemColors.ControlTextBrush;
+    }
+
     public static (bool okClicked, bool restartSteam) Show(IPlayniteAPI api, string message)
     {
         var window = api.Dialogs.CreateWindow(new WindowCreationOptions { ShowCloseButton = true });
@@ -19,6 +36,7 @@ public static class ExportCompletionDialog
         window.ResizeMode = ResizeMode.NoResize;
         window.WindowStartupLocation = WindowStartupLocation.CenterScreen;
 
+        var textBrush = GetThemeAwareTextBrush();
         var mainPanel = new StackPanel { Margin = new Thickness(20) };
 
         var textBlock = new TextBlock
@@ -26,25 +44,27 @@ public static class ExportCompletionDialog
             Text = message,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 15),
-            Foreground = Brushes.White,
+            Foreground = textBrush,
             FontSize = 14
         };
         mainPanel.Children.Add(textBlock);
 
-        var actionPanel = new DockPanel
+        var actionPanel = new StackPanel
         {
+            Orientation = Orientation.Horizontal,
             Margin = new Thickness(0, 15, 0, 0),
-            LastChildFill = false
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Center
         };
 
         var restartCheck = new CheckBox
         {
             Content = "Restart Steam?",
-            Foreground = Brushes.White,
+            Margin = new Thickness(0, 0, 15, 0),
+            Foreground = textBrush,
             FontSize = 14,
             VerticalAlignment = VerticalAlignment.Center
         };
-        DockPanel.SetDock(restartCheck, Dock.Left);
         actionPanel.Children.Add(restartCheck);
 
         var okButton = new Button
@@ -53,9 +73,9 @@ public static class ExportCompletionDialog
             Width = 80,
             Height = 30,
             IsDefault = true,
+            HorizontalAlignment = HorizontalAlignment.Right,
             VerticalAlignment = VerticalAlignment.Center
         };
-        DockPanel.SetDock(okButton, Dock.Right);
 
         okButton.Click += (s, e) =>
         {

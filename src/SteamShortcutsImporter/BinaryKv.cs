@@ -25,27 +25,41 @@ internal static class BinaryKv
         var obj = new Dictionary<string, object>(System.StringComparer.Ordinal);
         while (true)
         {
-            byte t = br.ReadByte();
-            if (t == End)
+            string? key = null;
+            long position = 0;
+            
+            try
             {
-                break;
+                byte t = br.ReadByte();
+                if (t == End)
+                {
+                    break;
+                }
+
+                key = ReadCString(br);
+                position = br.BaseStream.Position;
+
+                switch (t)
+                {
+                    case String:
+                        obj[key] = ReadCString(br);
+                        break;
+                    case Int32:
+                        obj[key] = br.ReadInt32();
+                        break;
+                    case Object:
+                        obj[key] = ReadObject(br);
+                        break;
+                    default:
+                        throw new InvalidDataException($"Unsupported KV type: 0x{t:x2}");
+                }
             }
-
-            string key = ReadCString(br);
-
-            switch (t)
+            catch (EndOfStreamException ex)
             {
-                case String:
-                    obj[key] = ReadCString(br);
-                    break;
-                case Int32:
-                    obj[key] = br.ReadInt32();
-                    break;
-                case Object:
-                    obj[key] = ReadObject(br);
-                    break;
-                default:
-                    throw new InvalidDataException($"Unsupported KV type: 0x{t:x2}");
+                throw new InvalidDataException(
+                    "Malformed shortcuts.vdf: unexpected end of file while reading " + 
+                    (key != null ? $"key '{key}'" : "object type") + 
+                    $" at position {position}", ex);
             }
         }
         return obj;
