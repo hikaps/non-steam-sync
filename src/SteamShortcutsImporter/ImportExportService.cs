@@ -240,18 +240,20 @@ internal class ImportExportService
                 onConfirm: selectedGames =>
                 {
                     var res = AddGamesToSteamCore(selectedGames);
-                    var msg = $"Steam shortcuts updated. Created: {res.Added}, Updated: {res.Updated}, Skipped: {res.Skipped}.";
-                    var (okClicked, restartSteam) = ExportCompletionDialog.Show(_library.PlayniteApi, msg);
-                    if (restartSteam)
+                    
+                    if (res.Added == 0 && res.Updated == 0 && res.Skipped == 0)
                     {
-                        if (SteamProcessHelper.IsSteamRunning())
-                        {
-                            Logger.Info("Steam is running, closing before restart...");
-                            SteamProcessHelper.TryCloseSteam();
-                        }
-                        var launchAttempted = SteamProcessHelper.TryLaunchSteam(_library.Settings.SteamRootPath);
-                        Logger.Info($"Steam restart requested; launch attempt: {launchAttempted}");
+                        return;
                     }
+
+                    if (res.WasSteamRunning)
+                    {
+                        Logger.Info("Restarting Steam after export...");
+                        SteamProcessHelper.TryLaunchSteam(_library.Settings.SteamRootPath);
+                    }
+
+                    var msg = $"Steam shortcuts updated. Created: {res.Added}, Updated: {res.Updated}, Skipped: {res.Skipped}.";
+                    ExportCompletionDialog.Show(_library.PlayniteApi, msg);
                 });
         }
         catch (Exception ex)
@@ -275,7 +277,17 @@ internal class ImportExportService
 
         var res = AddGamesToSteamCore(games);
         
-        // Build result message
+        if (res.Added == 0 && res.Updated == 0 && res.Skipped == 0)
+        {
+            return;
+        }
+
+        if (res.WasSteamRunning)
+        {
+            Logger.Info("Restarting Steam after export...");
+            SteamProcessHelper.TryLaunchSteam(_library.Settings.SteamRootPath);
+        }
+
         var msg = $"Added: {res.Added}, Updated: {res.Updated}";
         if (res.Skipped > 0)
         {
@@ -290,18 +302,8 @@ internal class ImportExportService
                 msg += $"\n... and {res.SkippedGames.Count - 5} more (see logs for details)";
             }
         }
-        
-        var (okClicked, restartSteam) = ExportCompletionDialog.Show(_library.PlayniteApi, msg);
-        if (restartSteam)
-        {
-            if (SteamProcessHelper.IsSteamRunning())
-            {
-                Logger.Info("Steam is running, closing before restart...");
-                SteamProcessHelper.TryCloseSteam();
-            }
-            var launchAttempted = SteamProcessHelper.TryLaunchSteam(_library.Settings.SteamRootPath);
-            Logger.Info($"Steam restart requested; launch attempt: {launchAttempted}");
-        }
+
+        ExportCompletionDialog.Show(_library.PlayniteApi, msg);
     }
 
     private Dictionary<string, uint> BuildPlayniteIdLookup()
@@ -435,33 +437,16 @@ internal class ImportExportService
         }
     }
 
-    /// <summary>
-    /// Checks if Steam is running and prompts the user to confirm proceeding.
-    /// Returns true if we should proceed, false if user cancelled.
-    /// </summary>
-    private bool CheckSteamRunningAndConfirm(ExportContext context)
+    private bool ConfirmSteamRestart()
     {
-        context.SteamCheckPerformed = true;
-        
-        if (!SteamProcessHelper.IsSteamRunning())
-        {
-            return true;
-        }
-
         var result = _library.PlayniteApi.Dialogs.ShowMessage(
-            SteamProcessHelper.GetSteamRunningWarning(),
+            Constants.SteamRestartConfirmMessage,
             _library.Name,
             System.Windows.MessageBoxButton.YesNo,
-            System.Windows.MessageBoxImage.Warning
+            System.Windows.MessageBoxImage.Question
         );
         
-        if (result == System.Windows.MessageBoxResult.No)
-        {
-            return false;
-        }
-        
-        Logger.Warn("User proceeded with export despite Steam running.");
-        return true;
+        return result == System.Windows.MessageBoxResult.Yes;
     }
 
     private ExportResult AddGamesToSteamCore(IEnumerable<Game> games)
@@ -472,22 +457,24 @@ internal class ImportExportService
             return new ExportResult();
         }
 
-        var context = new ExportContext();
-
-        // Check if Steam is running BEFORE processing any games (and showing browse dialogs)
-        if (!CheckSteamRunningAndConfirm(context))
+        if (!ConfirmSteamRestart())
         {
-            Logger.Info("User cancelled export due to Steam running.");
-            context.SteamCheckPerformed = false; // Reset for next operation
+            Logger.Info("User cancelled export.");
             return new ExportResult();
+        }
+
+        var wasSteamRunning = SteamProcessHelper.IsSteamRunning();
+        if (wasSteamRunning)
+        {
+            Logger.Info("Closing Steam before export...");
+            SteamProcessHelper.TryCloseSteam();
         }
 
         var shortcuts = File.Exists(vdfPath) ? ShortcutsFile.Read(vdfPath!).ToList() : new List<SteamShortcut>();
         var existing = shortcuts.ToDictionary(s => s.AppId, s => s);
         var byPlayniteId = BuildPlayniteIdLookup();
 
-        // Reset skip all state for this batch
-        context.SkipAllRemaining = false;
+        var context = new ExportContext { SkipAllRemaining = false };
 
         int added = 0, updated = 0, skipped = 0;
         var skippedGames = new List<string>();
@@ -519,7 +506,7 @@ internal class ImportExportService
         }
 
         WriteShortcutsWithBackup(vdfPath!, shortcuts, context);
-        return new ExportResult { Added = added, Updated = updated, Skipped = skipped, SkippedGames = skippedGames };
+        return new ExportResult { Added = added, Updated = updated, Skipped = skipped, SkippedGames = skippedGames, WasSteamRunning = wasSteamRunning };
     }
 
     private static string GetSkipReason(Game g, ExeDiscoveryResult result)
@@ -862,33 +849,8 @@ internal class ImportExportService
             || val.StartsWith("steam://", StringComparison.OrdinalIgnoreCase);
     }
 
-    /// <summary>
-    /// Writes shortcuts to VDF file with backup.
-    /// </summary>
     public void WriteShortcutsWithBackup(string vdfPath, List<SteamShortcut> shortcuts, ExportContext context)
     {
-        // Check if Steam is running and warn user (skip if already checked in this batch)
-        if (!context.SteamCheckPerformed && SteamProcessHelper.IsSteamRunning())
-        {
-            var result = _library.PlayniteApi.Dialogs.ShowMessage(
-                SteamProcessHelper.GetSteamRunningWarning(),
-                _library.Name,
-                System.Windows.MessageBoxButton.YesNo,
-                System.Windows.MessageBoxImage.Warning
-            );
-            
-            if (result == System.Windows.MessageBoxResult.No)
-            {
-                Logger.Info("User cancelled VDF write due to Steam running.");
-                return;
-            }
-            
-            Logger.Warn("User proceeded with VDF write despite Steam running.");
-        }
-
-        // Reset flag after write operation
-        context.SteamCheckPerformed = false;
-
         try
         {
             var userId = BackupManager.TryGetSteamUserFromPath(vdfPath) ?? Constants.DefaultUserSegment;
@@ -910,6 +872,7 @@ internal class ImportExportService
         public int Updated; 
         public int Skipped;
         public List<string> SkippedGames = new List<string>();
+        public bool WasSteamRunning;
     }
 
     /// <summary>

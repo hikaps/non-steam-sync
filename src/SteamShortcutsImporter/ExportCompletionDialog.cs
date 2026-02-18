@@ -5,32 +5,23 @@ using System.Windows.Media;
 
 namespace SteamShortcutsImporter;
 
-/// <summary>
-/// Dialog displayed after export completes, offering to restart Steam.
-/// </summary>
 public static class ExportCompletionDialog
 {
-    // Playnite theme resource key for text foreground color
     private const string TextBrushKey = "TextBrush";
 
-    /// <summary>
-    /// Gets a theme-aware brush for text, falling back to system colors if Playnite theme is unavailable.
-    /// </summary>
     private static Brush GetThemeAwareTextBrush()
     {
-        // Try to get Playnite's theme text brush
         if (Application.Current?.TryFindResource(TextBrushKey) is Brush themeBrush)
         {
             return themeBrush;
         }
-        // Fallback to system control text color (adapts to OS theme)
         return SystemColors.ControlTextBrush;
     }
 
-    public static (bool okClicked, bool restartSteam) Show(IPlayniteAPI api, string message)
+    public static void Show(IPlayniteAPI api, string message)
     {
         var window = api.Dialogs.CreateWindow(new WindowCreationOptions { ShowCloseButton = true });
-        window.Title = "Export Complete";
+        window.Title = Constants.ExportCompleteTitle;
         window.Width = 500;
         window.SizeToContent = SizeToContent.Height;
         window.ResizeMode = ResizeMode.NoResize;
@@ -49,32 +40,13 @@ public static class ExportCompletionDialog
         };
         mainPanel.Children.Add(textBlock);
 
-        var actionPanel = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Margin = new Thickness(0, 15, 0, 0),
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            VerticalAlignment = VerticalAlignment.Center
-        };
-
-        var restartCheck = new CheckBox
-        {
-            Content = "Restart Steam?",
-            Margin = new Thickness(0, 0, 15, 0),
-            Foreground = textBrush,
-            FontSize = 14,
-            VerticalAlignment = VerticalAlignment.Center
-        };
-        actionPanel.Children.Add(restartCheck);
-
         var okButton = new Button
         {
             Content = "OK",
             Width = 80,
             Height = 30,
             IsDefault = true,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            VerticalAlignment = VerticalAlignment.Center
+            HorizontalAlignment = HorizontalAlignment.Right
         };
 
         okButton.Click += (s, e) =>
@@ -83,13 +55,8 @@ public static class ExportCompletionDialog
             window.Close();
         };
 
-        actionPanel.Children.Add(okButton);
-        mainPanel.Children.Add(actionPanel);
-
+        mainPanel.Children.Add(okButton);
         window.Content = mainPanel;
-
-        var result = window.ShowDialog();
-
-        return (result == true, result == true && restartCheck.IsChecked == true);
+        window.ShowDialog();
     }
 }
