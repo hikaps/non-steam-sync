@@ -115,5 +115,4 @@ internal static class Constants
     public const string SteamRestartConfirmMessage = "Steam will be restarted to complete this operation.\n\n" +
         "This ensures shortcuts are written safely without corruption.\n\n" +
         "Do you want to continue?";
-    public const string ExportCompleteTitle = "Export Complete";
 }

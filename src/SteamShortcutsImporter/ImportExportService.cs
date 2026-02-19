@@ -253,7 +253,7 @@ internal class ImportExportService
                     }
 
                     var msg = $"Steam shortcuts updated. Created: {res.Added}, Updated: {res.Updated}, Skipped: {res.Skipped}.";
-                    ExportCompletionDialog.Show(_library.PlayniteApi, msg);
+                    _library.PlayniteApi.Dialogs.ShowMessage(msg, _library.Name);
                 });
         }
         catch (Exception ex)
@@ -303,7 +303,7 @@ internal class ImportExportService
             }
         }
 
-        ExportCompletionDialog.Show(_library.PlayniteApi, msg);
+        _library.PlayniteApi.Dialogs.ShowMessage(msg, _library.Name);
     }
 
     private Dictionary<string, uint> BuildPlayniteIdLookup()
