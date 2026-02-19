@@ -110,4 +110,9 @@ internal static class Constants
 
     // Selection dialog indicators
     public const string ExeNotSetIndicator = "(executable not set - will prompt)";
+
+    // Steam restart confirmation
+    public const string SteamRestartConfirmMessage = "Steam will be restarted to complete this operation.\n\n" +
+        "This ensures shortcuts are written safely without corruption.\n\n" +
+        "Do you want to continue?";
 }
