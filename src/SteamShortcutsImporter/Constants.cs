@@ -115,4 +115,9 @@ internal static class Constants
     public const string SteamRestartConfirmMessage = "Steam will be restarted to complete this operation.\n\n" +
         "This ensures shortcuts are written safely without corruption.\n\n" +
         "Do you want to continue?";
+
+    // Steam user selection UI
+    public const string SteamUserLabel = "Default Steam user:";
+    public const string AutoDetectUserLabel = "(Auto-detect)";
+    public const string SteamUserFallbackFormat = "Steam User {0}";
 }

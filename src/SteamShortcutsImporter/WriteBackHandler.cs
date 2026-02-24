@@ -17,6 +17,7 @@ internal class WriteBackHandler : IDisposable
     private readonly SteamPathResolver _pathResolver;
     private readonly ArtworkManager _artworkManager;
     private readonly ImportExportService _importExportService;
+    private readonly PluginSettings _settings;
 
     // Debouncing for Games_ItemUpdated to prevent race conditions
     private Timer? _updateDebounceTimer;
@@ -30,7 +31,8 @@ internal class WriteBackHandler : IDisposable
         Guid pluginId,
         SteamPathResolver pathResolver,
         ArtworkManager artworkManager,
-        ImportExportService importExportService)
+        ImportExportService importExportService,
+        PluginSettings settings)
     {
         _logger = logger;
         _playniteApi = playniteApi;
@@ -38,6 +40,7 @@ internal class WriteBackHandler : IDisposable
         _pathResolver = pathResolver;
         _artworkManager = artworkManager;
         _importExportService = importExportService;
+        _settings = settings;
 
         try
         {
@@ -90,7 +93,7 @@ internal class WriteBackHandler : IDisposable
         // Persist all pending changes from Playnite back to shortcuts.vdf
         try
         {
-            var vdfPath = _pathResolver.ResolveShortcutsVdfPath();
+            var vdfPath = _pathResolver.ResolveShortcutsVdfPathForUser(_settings.SelectedSteamUserId);
             if (string.IsNullOrWhiteSpace(vdfPath) || !File.Exists(vdfPath))
             {
                 return;

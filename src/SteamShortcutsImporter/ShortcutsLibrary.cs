@@ -44,7 +44,7 @@ public class ShortcutsLibrary : LibraryPlugin
         }
 
         _importExportService = new ImportExportService(this, _artworkManager, _pathResolver, _dialogBuilder, _backupManager);
-        _writeBackHandler = new WriteBackHandler(Logger, PlayniteApi, pluginId, _pathResolver, _artworkManager, _importExportService);
+        _writeBackHandler = new WriteBackHandler(Logger, PlayniteApi, pluginId, _pathResolver, _artworkManager, _importExportService, Settings);
     }
 
     public override void Dispose()
@@ -259,7 +259,7 @@ public class ShortcutsLibrary : LibraryPlugin
                 {
                     try
                     {
-                        var vdf = _pathResolver.ResolveShortcutsVdfPath();
+                        var vdf = _pathResolver.ResolveShortcutsVdfPathForUser(Settings.SelectedSteamUserId);
                         string? grid = null;
                         if (!string.IsNullOrEmpty(vdf))
                         {
@@ -287,7 +287,7 @@ public class ShortcutsLibrary : LibraryPlugin
     
     public override IEnumerable<GameMetadata> GetGames(LibraryGetGamesArgs args)
     {
-        var vdfPath = _pathResolver.ResolveShortcutsVdfPath();
+        var vdfPath = _pathResolver.ResolveShortcutsVdfPathForUser(Settings.SelectedSteamUserId);
         if (string.IsNullOrWhiteSpace(vdfPath) || !File.Exists(vdfPath))
         {
             Logger.Warn($"shortcuts.vdf not found. SteamRootPath= '{Settings.SteamRootPath}' ResolvedVdf= '{vdfPath}'");

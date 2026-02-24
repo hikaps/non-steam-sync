@@ -36,7 +36,7 @@ internal class ImportExportService
     /// </summary>
     public void ShowImportDialog()
     {
-        var vdfPath = _pathResolver.ResolveShortcutsVdfPath();
+        var vdfPath = _pathResolver.ResolveShortcutsVdfPathForUser(_library.Settings.SelectedSteamUserId);
         if (string.IsNullOrWhiteSpace(vdfPath) || !File.Exists(vdfPath))
         {
             _library.PlayniteApi.Dialogs.ShowErrorMessage(Constants.SteamPathRequiredMessage, _library.Name);
@@ -161,7 +161,7 @@ internal class ImportExportService
     /// </summary>
     public void ShowAddToSteamDialog()
     {
-        var vdfPath = _pathResolver.ResolveShortcutsVdfPath();
+        var vdfPath = _pathResolver.ResolveShortcutsVdfPathForUser(_library.Settings.SelectedSteamUserId);
         if (string.IsNullOrWhiteSpace(vdfPath))
         {
             _library.PlayniteApi.Dialogs.ShowErrorMessage(Constants.SteamPathRequiredMessage, _library.Name);
@@ -268,7 +268,7 @@ internal class ImportExportService
     /// </summary>
     public void AddGamesToSteam(IEnumerable<Game> games)
     {
-        var vdfPath = _pathResolver.ResolveShortcutsVdfPath();
+        var vdfPath = _pathResolver.ResolveShortcutsVdfPathForUser(_library.Settings.SelectedSteamUserId);
         if (string.IsNullOrWhiteSpace(vdfPath))
         {
             _library.PlayniteApi.Dialogs.ShowErrorMessage(Constants.SteamPathRequiredMessage, _library.Name);
@@ -451,7 +451,7 @@ internal class ImportExportService
 
     private ExportResult AddGamesToSteamCore(IEnumerable<Game> games)
     {
-        var vdfPath = _pathResolver.ResolveShortcutsVdfPath();
+        var vdfPath = _pathResolver.ResolveShortcutsVdfPathForUser(_library.Settings.SelectedSteamUserId);
         if (string.IsNullOrWhiteSpace(vdfPath))
         {
             return new ExportResult();
