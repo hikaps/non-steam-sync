@@ -15,6 +15,9 @@ public class PluginSettingsView : UserControl
     private TextBox? _pathBox;
     private TextBlock? _validationText;
     private TextBlock? _validationInfo;
+    private ComboBox? _userComboBox;
+    private string? _currentSteamRootPath;
+    private bool _isRefreshingUsers;
 
     public PluginSettingsView() : this(null) { }
 
@@ -101,6 +104,24 @@ public class PluginSettingsView : UserControl
             new System.Windows.Data.Binding("LaunchViaSteam") { Mode = System.Windows.Data.BindingMode.TwoWay });
         panel.Children.Add(launchCheck);
 
+        // Steam user selection
+        panel.Children.Add(new TextBlock
+        {
+            Text = Constants.SteamUserLabel,
+            FontWeight = FontWeights.Bold,
+            FontSize = 11,
+            Margin = new Thickness(0, 12, 0, 0)
+        });
+
+        _userComboBox = new ComboBox
+        {
+            MinWidth = 250,
+            Margin = new Thickness(0, 4, 0, 0),
+            HorizontalAlignment = HorizontalAlignment.Left
+        };
+        _userComboBox.SelectionChanged += UserComboBox_SelectionChanged;
+        panel.Children.Add(_userComboBox);
+
         // Restore Backup button
         var restoreBtn = new Button
         {
@@ -115,7 +136,11 @@ public class PluginSettingsView : UserControl
         Content = panel;
 
         // Initial validation after load
-        Loaded += (_, _) => UpdateValidation();
+        Loaded += (_, _) =>
+        {
+            UpdateValidation();
+            RefreshUserList();
+        };
     }
 
     private void BrowseButton_Click(object sender, RoutedEventArgs e)
@@ -206,6 +231,14 @@ public class PluginSettingsView : UserControl
         else
         {
             _validationInfo.Visibility = Visibility.Collapsed;
+        }
+
+        // Refresh user list if path changed
+        var newSteamPath = _pathBox.Text;
+        if (newSteamPath != _currentSteamRootPath)
+        {
+            _currentSteamRootPath = newSteamPath;
+            RefreshUserList();
         }
     }
 
@@ -374,6 +407,80 @@ public class PluginSettingsView : UserControl
         catch (Exception ex)
         {
             LogManager.GetLogger().Error(ex, "Failed to restore backup.");
+        }
+    }
+
+    private void RefreshUserList()
+    {
+        if (_userComboBox == null || _isRefreshingUsers) return;
+
+        _isRefreshingUsers = true;
+        try
+        {
+            var steamPath = _pathBox?.Text;
+            var users = SteamUsersReader.GetValidUsers(steamPath, ShortcutsLibrary.GetSteamUserIdsStatic());
+
+            _userComboBox.Items.Clear();
+
+            // Add "Auto-detect" option first
+            var autoItem = new ComboBoxItem { Content = Constants.AutoDetectUserLabel, Tag = null };
+            _userComboBox.Items.Add(autoItem);
+
+            // Add users
+            foreach (var user in users)
+            {
+                var item = new ComboBoxItem { Content = user.DisplayName, Tag = user.UserId };
+                _userComboBox.Items.Add(item);
+            }
+
+            // Select current setting or auto-detect
+            var settings = DataContext as PluginSettings;
+            var selectedUserId = settings?.SelectedSteamUserId;
+
+            if (string.IsNullOrEmpty(selectedUserId))
+            {
+                _userComboBox.SelectedItem = autoItem;
+            }
+            else
+            {
+                var matchingItem = _userComboBox.Items.Cast<ComboBoxItem>()
+                    .FirstOrDefault(i => i.Tag as string == selectedUserId);
+
+                if (matchingItem != null)
+                {
+                    _userComboBox.SelectedItem = matchingItem;
+                }
+                else
+                {
+                    // Selected user no longer exists, clear and save
+                    _userComboBox.SelectedItem = autoItem;
+                    if (settings != null)
+                    {
+                        settings.SelectedSteamUserId = null;
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            LogManager.GetLogger().Warn(ex, "Failed to refresh user list.");
+        }
+        finally
+        {
+            _isRefreshingUsers = false;
+        }
+    }
+
+    private void UserComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_userComboBox == null || _isRefreshingUsers) return;
+
+        var selectedItem = _userComboBox.SelectedItem as ComboBoxItem;
+        var settings = DataContext as PluginSettings;
+
+        if (settings != null)
+        {
+            settings.SelectedSteamUserId = selectedItem?.Tag as string;
         }
     }
 }

@@ -15,6 +15,7 @@ public class PluginSettings : ISettings
 
     public string SteamRootPath { get; set; } = string.Empty;
     public bool LaunchViaSteam { get; set; } = true;
+    public string? SelectedSteamUserId { get; set; } = null;
     public Dictionary<string, string> ExportMap { get; set; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
     public void BeginEdit() { }
@@ -49,12 +50,14 @@ public class PluginSettings : ISettings
             {
                 SteamRootPath = saved.SteamRootPath;
                 LaunchViaSteam = saved.LaunchViaSteam;
+                SelectedSteamUserId = saved.SelectedSteamUserId;
                 ExportMap = saved.ExportMap ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             }
             else
             {
                 SteamRootPath = GuessSteamRootPath() ?? string.Empty;
                 LaunchViaSteam = true;
+                SelectedSteamUserId = null;
                 ExportMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             }
         }
@@ -63,6 +66,7 @@ public class PluginSettings : ISettings
             LogManager.GetLogger().Error(ex, "Failed to load saved settings, falling back to defaults.");
             SteamRootPath = GuessSteamRootPath() ?? string.Empty;
             LaunchViaSteam = true;
+            SelectedSteamUserId = null;
             ExportMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         }
     }

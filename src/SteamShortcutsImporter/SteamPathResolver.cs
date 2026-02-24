@@ -57,6 +57,54 @@ internal class SteamPathResolver
         return null;
     }
 
+
+    /// <summary>
+    /// Resolves the path to shortcuts.vdf for a specific Steam user.
+    /// If userId is null or empty, falls back to the first valid shortcuts.vdf found.
+    /// </summary>
+    /// <param name="userId">The Steam user ID (numeric folder name in userdata).</param>
+    /// <returns>Path to shortcuts.vdf, or null if not found.</returns>
+    public string? ResolveShortcutsVdfPathForUser(string? userId)
+    {
+        // If no specific user, use default behavior (first found)
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return ResolveShortcutsVdfPath();
+        }
+
+        try
+        {
+            var root = _steamRootPath ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
+            {
+                return null;
+            }
+
+            var vdfPath = Path.Combine(root, Constants.UserDataDirectory, userId, Constants.ConfigDirectory, "shortcuts.vdf");
+            if (File.Exists(vdfPath))
+            {
+                return vdfPath;
+            }
+
+            // User's shortcuts.vdf doesn't exist yet - return the path anyway
+            // (it will be created on export)
+            var userDir = Path.Combine(root, Constants.UserDataDirectory, userId);
+            if (Directory.Exists(userDir))
+            {
+                return vdfPath;
+            }
+
+            // User directory doesn't exist - fall back to auto-detect
+            Logger.Warn($"Selected user directory not found: {userDir}. Falling back to auto-detect.");
+            return ResolveShortcutsVdfPath();
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex, $"Failed to resolve shortcuts.vdf path for user {userId}.");
+            return ResolveShortcutsVdfPath();
+        }
+    }
+
     /// <summary>
     /// Expands path variables in a game action path.
     /// Supports {InstallDir} variable and environment variables.

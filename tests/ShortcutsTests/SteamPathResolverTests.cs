@@ -647,6 +647,145 @@ public class SteamPathResolverTests
                 Directory.Delete(tempDir, recursive: true);
         }
     }
+    #endregion
+
+    #region ResolveShortcutsVdfPathForUser Tests
+
+    [Fact]
+    public void ResolveShortcutsVdfPathForUser_WithValidUserId_ReturnsCorrectPath()
+    {
+        var tempRoot = Path.Combine(Path.GetTempPath(), "steam_test_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var userDataDir = Path.Combine(tempRoot, "userdata", "12345678901234567", "config");
+            Directory.CreateDirectory(userDataDir);
+            var vdfPath = Path.Combine(userDataDir, "shortcuts.vdf");
+            File.WriteAllText(vdfPath, "test");
+
+            var resolver = new SteamPathResolver(tempRoot);
+            var result = resolver.ResolveShortcutsVdfPathForUser("12345678901234567");
+
+            Assert.NotNull(result);
+            Assert.Equal(vdfPath, result);
+        }
+        finally
+        {
+            if (Directory.Exists(tempRoot))
+                Directory.Delete(tempRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ResolveShortcutsVdfPathForUser_WithNullUserId_FallsBackToAutoDetect()
+    {
+        var tempRoot = Path.Combine(Path.GetTempPath(), "steam_test_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var userDataDir = Path.Combine(tempRoot, "userdata", "99999999999999999", "config");
+            Directory.CreateDirectory(userDataDir);
+            var vdfPath = Path.Combine(userDataDir, "shortcuts.vdf");
+            File.WriteAllText(vdfPath, "test");
+
+            var resolver = new SteamPathResolver(tempRoot);
+            var result = resolver.ResolveShortcutsVdfPathForUser(null);
+
+            Assert.NotNull(result);
+            Assert.Equal(vdfPath, result);
+        }
+        finally
+        {
+            if (Directory.Exists(tempRoot))
+                Directory.Delete(tempRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ResolveShortcutsVdfPathForUser_WithEmptyUserId_FallsBackToAutoDetect()
+    {
+        var tempRoot = Path.Combine(Path.GetTempPath(), "steam_test_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var userDataDir = Path.Combine(tempRoot, "userdata", "11111111111111111", "config");
+            Directory.CreateDirectory(userDataDir);
+            var vdfPath = Path.Combine(userDataDir, "shortcuts.vdf");
+            File.WriteAllText(vdfPath, "test");
+
+            var resolver = new SteamPathResolver(tempRoot);
+            var result = resolver.ResolveShortcutsVdfPathForUser("");
+
+            Assert.NotNull(result);
+            Assert.Equal(vdfPath, result);
+        }
+        finally
+        {
+            if (Directory.Exists(tempRoot))
+                Directory.Delete(tempRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ResolveShortcutsVdfPathForUser_UserDirExistsButNoVdf_ReturnsPath()
+    {
+        var tempRoot = Path.Combine(Path.GetTempPath(), "steam_test_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var userDataDir = Path.Combine(tempRoot, "userdata", "12345678901234567", "config");
+            Directory.CreateDirectory(userDataDir);
+            // No shortcuts.vdf created
+
+            var resolver = new SteamPathResolver(tempRoot);
+            var result = resolver.ResolveShortcutsVdfPathForUser("12345678901234567");
+
+            Assert.NotNull(result);
+            Assert.Contains("12345678901234567", result);
+            Assert.Contains("shortcuts.vdf", result);
+        }
+        finally
+        {
+            if (Directory.Exists(tempRoot))
+                Directory.Delete(tempRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ResolveShortcutsVdfPathForUser_UserDirNotExist_FallsBackToAutoDetect()
+    {
+        var tempRoot = Path.Combine(Path.GetTempPath(), "steam_test_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            // Create a different user with vdf for fallback
+            var fallbackDir = Path.Combine(tempRoot, "userdata", "99999999999999999", "config");
+            Directory.CreateDirectory(fallbackDir);
+            var fallbackVdf = Path.Combine(fallbackDir, "shortcuts.vdf");
+            File.WriteAllText(fallbackVdf, "test");
+
+            // Create userdata dir but not the specific user dir
+            Directory.CreateDirectory(Path.Combine(tempRoot, "userdata"));
+
+            var resolver = new SteamPathResolver(tempRoot);
+            var result = resolver.ResolveShortcutsVdfPathForUser("12345678901234567");
+
+            // Should fall back to auto-detect
+            Assert.NotNull(result);
+            Assert.Equal(fallbackVdf, result);
+        }
+        finally
+        {
+            if (Directory.Exists(tempRoot))
+                Directory.Delete(tempRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ResolveShortcutsVdfPathForUser_InvalidSteamPath_ReturnsNull()
+    {
+        var invalidPath = Path.Combine(Path.GetTempPath(), "nonexistent_" + Guid.NewGuid().ToString("N"));
+        var resolver = new SteamPathResolver(invalidPath);
+
+        var result = resolver.ResolveShortcutsVdfPathForUser("12345678901234567");
+
+        Assert.Null(result);
+    }
 
     #endregion
 }
