@@ -109,7 +109,8 @@ public class ShortcutsLibrary : LibraryPlugin
             {
                 var userId = Path.GetFileName(userDir);
                 // Filter out non-numeric directories (e.g., "ac" for anonymous)
-                if (!string.IsNullOrEmpty(userId) && userId.All(char.IsDigit))
+                // and "0" which is a system placeholder, not a real Steam user
+                if (!string.IsNullOrEmpty(userId) && userId != "0" && userId.All(char.IsDigit))
                 {
                     result.Add(userId);
                 }
