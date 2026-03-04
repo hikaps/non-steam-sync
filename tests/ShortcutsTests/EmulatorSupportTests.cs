@@ -73,6 +73,50 @@ public class EmulatorSupportTests
     }
 
     [Fact]
+    public void BuildCustomEmulatorResult_QuotesArgsWithSpaces()
+    {
+        var expand = CreateExpand();
+        var logger = Substitute.For<ILogger>();
+        var game = CreateGame("Test Game");
+        var action = CreateEmulatorAction(Guid.NewGuid(), "profile-1");
+        action.AdditionalArguments = "C:\\Games\\ROMs\\Game Boy\\Pokemon Red.gb";
+
+        var profile = new CustomEmulatorProfile
+        {
+            Executable = @"C:\\Emu\\emu.exe",
+            Arguments = string.Empty,
+            WorkingDirectory = @"C:\\Emu"
+        };
+
+        var result = ImportExportService.BuildCustomEmulatorResult(expand, logger, game, action, profile, @"C:\\Emu", "Test Game");
+
+        Assert.NotNull(result.action);
+        Assert.Equal("\"C:\\Games\\ROMs\\Game Boy\\Pokemon Red.gb\"", result.action.Arguments);
+    }
+
+    [Fact]
+    public void BuildCustomEmulatorResult_DoesNotQuoteFlagArgs()
+    {
+        var expand = CreateExpand();
+        var logger = Substitute.For<ILogger>();
+        var game = CreateGame("Test Game");
+        var action = CreateEmulatorAction(Guid.NewGuid(), "profile-1");
+        action.AdditionalArguments = "--fullscreen --volume=50";
+
+        var profile = new CustomEmulatorProfile
+        {
+            Executable = @"C:\\Emu\\emu.exe",
+            Arguments = string.Empty,
+            WorkingDirectory = @"C:\\Emu"
+        };
+
+        var result = ImportExportService.BuildCustomEmulatorResult(expand, logger, game, action, profile, @"C:\\Emu", "Test Game");
+
+        Assert.NotNull(result.action);
+        Assert.Equal("--fullscreen --volume=50", result.action.Arguments);
+    }
+
+    [Fact]
     public void BuildCustomEmulatorResult_EmptyExecutable_ReturnsNullAction()
     {
         var expand = CreateExpand();
@@ -214,3 +258,6 @@ public class EmulatorSupportTests
         return (_, input, __) => input;
     }
 }
+
+// Note: Tests for regex pattern resolution (IsRegexPattern and ResolveExecutablePattern)
+// are in PatternResolutionTests.cs to allow file system operations on .NET 6.0

@@ -757,6 +757,17 @@ internal class ImportExportService
     {
         // Get executable path
         var exePath = profile.Executable ?? string.Empty;
+
+        // Resolve regex patterns to actual file paths
+        if (IsRegexPattern(exePath))
+        {
+            exePath = ResolveExecutablePattern(exePath, emulatorInstallDir, logger, g.Name);
+            if (string.IsNullOrEmpty(exePath))
+            {
+                return (string.Empty, null, name, null);
+            }
+        }
+
         if (string.IsNullOrWhiteSpace(exePath))
         {
             logger.Warn($"Cannot export '{g.Name}': Emulator profile has no executable set");
@@ -784,6 +795,7 @@ internal class ImportExportService
         var emulatorDir = emulatorInstallDir ?? string.Empty;
         var expandedExe = expandVariables(g, exePath, emulatorDir);
         var expandedArgs = expandVariables(g, args, emulatorDir);
+        expandedArgs = QuoteArgumentsIfNeeded(expandedArgs);
 
         // Get working directory
         string? workDir = profile.WorkingDirectory;
@@ -859,6 +871,17 @@ internal class ImportExportService
 
         // Get executable from the definition
         var exePath = profileDef.StartupExecutable ?? string.Empty;
+
+        // Resolve regex patterns to actual file paths
+        if (IsRegexPattern(exePath))
+        {
+            exePath = ResolveExecutablePattern(exePath, emulatorInstallDir, logger, g.Name);
+            if (string.IsNullOrEmpty(exePath))
+            {
+                return (string.Empty, null, name, null);
+            }
+        }
+
         if (string.IsNullOrWhiteSpace(exePath))
         {
             logger.Warn($"Cannot export '{g.Name}': Built-in emulator profile has no startup executable");
@@ -899,6 +922,7 @@ internal class ImportExportService
         var emulatorDir = emulatorInstallDir ?? string.Empty;
         var expandedExe = expandVariables(g, exePath, emulatorDir);
         var expandedArgs = expandVariables(g, args, emulatorDir);
+        expandedArgs = QuoteArgumentsIfNeeded(expandedArgs);
 
         // Working directory - use emulator install dir if not specified
         string? workDir = emulatorInstallDir;
@@ -1124,6 +1148,87 @@ internal class ImportExportService
 
         ShortcutsFile.Write(vdfPath, shortcuts);
     }
+
+    #region Emulator Pattern Resolution
+
+    /// <summary>
+    /// Detects if a string looks like a regex pattern (rather than a literal file path).
+    /// </summary>
+    private static bool IsRegexPattern(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return false;
+
+        // Check for regex-specific patterns:
+        // - ^ (start anchor)
+        // - $ (end anchor)
+        // - \\. (escaped dot, not just \\ which is in Windows paths)
+        // - .* (wildcard)
+        return s.StartsWith("^") || s.EndsWith("$") || s.Contains("\\.") || s.Contains(".*");
+    }
+
+    private static string QuoteArgumentsIfNeeded(string? args)
+    {
+        if (string.IsNullOrWhiteSpace(args)) return args ?? string.Empty;
+
+        var trimmed = args.Trim();
+        if ((trimmed.StartsWith("\"") && trimmed.EndsWith("\"")) || !trimmed.Contains(" "))
+        {
+            return trimmed;
+        }
+
+        if (trimmed.Contains(" --") || trimmed.Contains(" -"))
+        {
+            return trimmed;
+        }
+
+        return "\"" + trimmed + "\"";
+    }
+
+    /// <summary>
+    /// Resolves a regex pattern to an actual executable file by matching against files in the emulator directory.
+    /// </summary>
+    private static string? ResolveExecutablePattern(string pattern, string? emulatorDir, ILogger logger, string gameName)
+    {
+        if (string.IsNullOrEmpty(emulatorDir) || !Directory.Exists(emulatorDir))
+        {
+            logger.Warn($"Cannot resolve emulator pattern for '{gameName}': Emulator directory not found ({emulatorDir})");
+            return null;
+        }
+
+        try
+        {
+            // Convert regex pattern to match against filenames
+            // Pattern like "^sameboy\\.exe$" should match "sameboy.exe"
+            var regexPattern = pattern;
+
+            // Ensure pattern has anchors for matching
+            if (!regexPattern.StartsWith("^")) regexPattern = "^" + regexPattern;
+            if (!regexPattern.EndsWith("$")) regexPattern = regexPattern + "$";
+
+            var regex = new System.Text.RegularExpressions.Regex(regexPattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+            // Scan for matching executables in the emulator directory
+            foreach (var file in Directory.EnumerateFiles(emulatorDir, "*.exe", SearchOption.TopDirectoryOnly))
+            {
+                var fileName = Path.GetFileName(file);
+                if (regex.IsMatch(fileName))
+                {
+                    logger.Info($"Resolved emulator pattern '{pattern}' to '{file}' for '{gameName}'");
+                    return file;
+                }
+            }
+
+            logger.Warn($"Cannot export '{gameName}': No executable matching pattern '{pattern}' found in {emulatorDir}");
+        }
+        catch (Exception ex)
+        {
+            logger.Warn(ex, $"Failed to resolve emulator pattern '{pattern}' for '{gameName}'");
+        }
+
+        return null;
+    }
+
+    #endregion
 
     #region Nested Classes
 

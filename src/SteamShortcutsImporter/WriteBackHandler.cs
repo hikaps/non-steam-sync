@@ -100,8 +100,9 @@ internal class WriteBackHandler : IDisposable
             }
 
             var shortcuts = ShortcutsFile.Read(vdfPath!).ToList();
-            var byStable = shortcuts.ToDictionary(s => s.StableId, s => s, StringComparer.OrdinalIgnoreCase);
-            var byApp = shortcuts.ToDictionary(s => s.AppId.ToString(), s => s, StringComparer.OrdinalIgnoreCase);
+            // Use GroupBy to handle duplicates safely (keep first occurrence)
+            var byStable = shortcuts.GroupBy(s => s.StableId, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+            var byApp = shortcuts.GroupBy(s => s.AppId.ToString(), StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
             bool changed = false;
 
             // Check all games from this library and sync any that changed
