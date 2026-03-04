@@ -13,17 +13,15 @@ public class EmulatorSupportTests
     [Fact]
     public void BuildEmulatorActionResult_MissingEmulator_ReturnsNullAction()
     {
-        var api = CreatePlayniteApi();
+        var expand = CreateExpand();
         var logger = Substitute.For<ILogger>();
         var game = CreateGame("Test Game");
         var action = CreateEmulatorAction(Guid.NewGuid(), "profile-1");
 
-        var database = Substitute.For<IGameDatabaseAPI>();
-        var emulators = CreateEmulatorCollection();
-        database.Emulators.Returns(emulators);
-        api.Database.Returns(database);
+        var emulators = new List<Emulator>();
+        var emulation = Substitute.For<IEmulationAPI>();
 
-        var result = ImportExportService.BuildEmulatorActionResult(api, logger, game, action);
+        var result = ImportExportService.BuildEmulatorActionResult(emulators, emulation, expand, logger, game, action);
 
         Assert.Null(result.action);
         Assert.Equal("Test Game", result.name);
@@ -32,7 +30,7 @@ public class EmulatorSupportTests
     [Fact]
     public void BuildCustomEmulatorResult_OverrideDefaultArgs_UsesOnlyActionArgs()
     {
-        var api = CreatePlayniteApi();
+        var expand = CreateExpand();
         var logger = Substitute.For<ILogger>();
         var game = CreateGame("Test Game");
         var action = CreateEmulatorAction(Guid.NewGuid(), "profile-1");
@@ -46,7 +44,7 @@ public class EmulatorSupportTests
             WorkingDirectory = @"C:\Emu"
         };
 
-        var result = ImportExportService.BuildCustomEmulatorResult(api, logger, game, action, profile, @"C:\Emu", "Test Game");
+        var result = ImportExportService.BuildCustomEmulatorResult(expand, logger, game, action, profile, @"C:\Emu", "Test Game");
 
         Assert.NotNull(result.action);
         Assert.Equal("--fullscreen --volume=50", result.action.Arguments);
@@ -55,7 +53,7 @@ public class EmulatorSupportTests
     [Fact]
     public void BuildCustomEmulatorResult_WithoutOverride_CombinesArgs()
     {
-        var api = CreatePlayniteApi();
+        var expand = CreateExpand();
         var logger = Substitute.For<ILogger>();
         var game = CreateGame("Test Game");
         var action = CreateEmulatorAction(Guid.NewGuid(), "profile-1");
@@ -68,7 +66,7 @@ public class EmulatorSupportTests
             WorkingDirectory = @"C:\Emu"
         };
 
-        var result = ImportExportService.BuildCustomEmulatorResult(api, logger, game, action, profile, @"C:\Emu", "Test Game");
+        var result = ImportExportService.BuildCustomEmulatorResult(expand, logger, game, action, profile, @"C:\Emu", "Test Game");
 
         Assert.NotNull(result.action);
         Assert.Equal("\"{ImagePath}\" --fullscreen", result.action.Arguments);
@@ -77,7 +75,7 @@ public class EmulatorSupportTests
     [Fact]
     public void BuildCustomEmulatorResult_EmptyExecutable_ReturnsNullAction()
     {
-        var api = CreatePlayniteApi();
+        var expand = CreateExpand();
         var logger = Substitute.For<ILogger>();
         var game = CreateGame("Test Game");
         var action = CreateEmulatorAction(Guid.NewGuid(), "profile-1");
@@ -88,7 +86,7 @@ public class EmulatorSupportTests
             Arguments = "-f"
         };
 
-        var result = ImportExportService.BuildCustomEmulatorResult(api, logger, game, action, profile, @"C:\Emu", "Test Game");
+        var result = ImportExportService.BuildCustomEmulatorResult(expand, logger, game, action, profile, @"C:\Emu", "Test Game");
 
         Assert.Null(result.action);
     }
@@ -96,7 +94,7 @@ public class EmulatorSupportTests
     [Fact]
     public void BuildBuiltInEmulatorResult_ProfileOverride_DefaultArgs_UsesCustomArgsOnly()
     {
-        var api = CreatePlayniteApi();
+        var expand = CreateExpand();
         var logger = Substitute.For<ILogger>();
         var emulation = Substitute.For<IEmulationAPI>();
         var game = CreateGame("Test Game");
@@ -127,7 +125,7 @@ public class EmulatorSupportTests
         emulation.GetEmulator("retroarch").Returns(definition);
 
         var result = ImportExportService.BuildBuiltInEmulatorResult(
-            api,
+            expand,
             logger,
             emulation,
             game,
@@ -144,7 +142,7 @@ public class EmulatorSupportTests
     [Fact]
     public void BuildBuiltInEmulatorResult_ActionOverride_DefaultArgs_UsesOnlyActionArgs()
     {
-        var api = CreatePlayniteApi();
+        var expand = CreateExpand();
         var logger = Substitute.For<ILogger>();
         var emulation = Substitute.For<IEmulationAPI>();
         var game = CreateGame("Test Game");
@@ -176,7 +174,7 @@ public class EmulatorSupportTests
         emulation.GetEmulator("retroarch").Returns(definition);
 
         var result = ImportExportService.BuildBuiltInEmulatorResult(
-            api,
+            expand,
             logger,
             emulation,
             game,
@@ -211,29 +209,8 @@ public class EmulatorSupportTests
         };
     }
 
-    private static IPlayniteAPI CreatePlayniteApi()
+    private static Func<Game, string, string, string> CreateExpand()
     {
-        var api = Substitute.For<IPlayniteAPI>();
-        api.Database.Returns(Substitute.For<IGameDatabaseAPI>());
-        api.Emulation.Returns(Substitute.For<IEmulationAPI>());
-        api.ExpandGameVariables(Arg.Any<Game>(), Arg.Any<string>(), Arg.Any<string>())
-            .Returns(info => info.ArgAt<string>(1));
-        return api;
-    }
-
-    private static IItemCollection<Emulator> CreateEmulatorCollection(params Emulator[] emulators)
-    {
-        var collection = Substitute.For<IItemCollection<Emulator>>();
-        var list = new List<Emulator>(emulators);
-
-        collection.GetEnumerator().Returns(list.GetEnumerator());
-        ((System.Collections.IEnumerable)collection).GetEnumerator().Returns(list.GetEnumerator());
-        collection.ContainsItem(Arg.Any<Guid>()).Returns(callInfo =>
-        {
-            var id = callInfo.Arg<Guid>();
-            return list.Exists(emulator => emulator.Id == id);
-        });
-
-        return collection;
+        return (_, input, __) => input;
     }
 }

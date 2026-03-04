@@ -687,11 +687,21 @@ internal class ImportExportService
         Game g,
         GameAction emulatorAction)
     {
+        return BuildEmulatorActionResult(playniteApi.Database.Emulators, playniteApi.Emulation, playniteApi.ExpandGameVariables, logger, g, emulatorAction);
+    }
+
+    internal static (string exePath, string? workDir, string name, GameAction? action) BuildEmulatorActionResult(
+        IEnumerable<Emulator> emulators,
+        IEmulationAPI emulationApi,
+        Func<Game, string, string, string> expandVariables,
+        ILogger logger,
+        Game g,
+        GameAction emulatorAction)
+    {
         var name = string.IsNullOrEmpty(g.Name) ? "Emulator Game" : g.Name;
 
         // Get emulator from database
-        var emulator = playniteApi.Database.Emulators
-            .FirstOrDefault(e => e.Id == emulatorAction.EmulatorId);
+        var emulator = emulators.FirstOrDefault(e => e.Id == emulatorAction.EmulatorId);
 
         if (emulator == null)
         {
@@ -710,13 +720,13 @@ internal class ImportExportService
         // Handle CustomEmulatorProfile
         if (profile is CustomEmulatorProfile customProfile)
         {
-            return BuildCustomEmulatorResult(playniteApi, logger, g, emulatorAction, customProfile, emulator.InstallDir, name);
+            return BuildCustomEmulatorResult(expandVariables, logger, g, emulatorAction, customProfile, emulator.InstallDir, name);
         }
 
         // Handle BuiltInEmulatorProfile
         if (profile is BuiltInEmulatorProfile builtInProfile)
         {
-            return BuildBuiltInEmulatorResult(playniteApi, logger, playniteApi.Emulation, g, emulatorAction, builtInProfile, emulator.InstallDir, emulator.BuiltInConfigId, name);
+            return BuildBuiltInEmulatorResult(expandVariables, logger, emulationApi, g, emulatorAction, builtInProfile, emulator.InstallDir, emulator.BuiltInConfigId, name);
         }
 
         logger.Warn($"Cannot export '{g.Name}': Unknown emulator profile type '{profile.GetType().Name}'");
@@ -733,11 +743,11 @@ internal class ImportExportService
         string? emulatorInstallDir,
         string name)
     {
-        return BuildCustomEmulatorResult(_library.PlayniteApi, Logger, g, emulatorAction, profile, emulatorInstallDir, name);
+        return BuildCustomEmulatorResult(_library.PlayniteApi.ExpandGameVariables, Logger, g, emulatorAction, profile, emulatorInstallDir, name);
     }
 
     internal static (string exePath, string? workDir, string name, GameAction? action) BuildCustomEmulatorResult(
-        IPlayniteAPI playniteApi,
+        Func<Game, string, string, string> expandVariables,
         ILogger logger,
         Game g,
         GameAction emulatorAction,
@@ -772,14 +782,14 @@ internal class ImportExportService
 
         // Expand variables using Playnite API
         var emulatorDir = emulatorInstallDir ?? string.Empty;
-        var expandedExe = playniteApi.ExpandGameVariables(g, exePath, emulatorDir);
-        var expandedArgs = playniteApi.ExpandGameVariables(g, args, emulatorDir);
+        var expandedExe = expandVariables(g, exePath, emulatorDir);
+        var expandedArgs = expandVariables(g, args, emulatorDir);
 
         // Get working directory
         string? workDir = profile.WorkingDirectory;
         if (!string.IsNullOrWhiteSpace(workDir))
         {
-            workDir = playniteApi.ExpandGameVariables(g, workDir, emulatorDir);
+            workDir = expandVariables(g, workDir, emulatorDir);
         }
 
         logger.Info($"Resolved emulator for '{g.Name}': Exe={expandedExe}, Args={expandedArgs}");
@@ -810,11 +820,11 @@ internal class ImportExportService
         string? builtInConfigId,
         string name)
     {
-        return BuildBuiltInEmulatorResult(_library.PlayniteApi, Logger, _library.PlayniteApi.Emulation, g, emulatorAction, profile, emulatorInstallDir, builtInConfigId, name);
+        return BuildBuiltInEmulatorResult(_library.PlayniteApi.ExpandGameVariables, Logger, _library.PlayniteApi.Emulation, g, emulatorAction, profile, emulatorInstallDir, builtInConfigId, name);
     }
 
     internal static (string exePath, string? workDir, string name, GameAction? action) BuildBuiltInEmulatorResult(
-        IPlayniteAPI playniteApi,
+        Func<Game, string, string, string> expandVariables,
         ILogger logger,
         IEmulationAPI emulationApi,
         Game g,
@@ -887,8 +897,8 @@ internal class ImportExportService
 
         // Expand variables
         var emulatorDir = emulatorInstallDir ?? string.Empty;
-        var expandedExe = playniteApi.ExpandGameVariables(g, exePath, emulatorDir);
-        var expandedArgs = playniteApi.ExpandGameVariables(g, args, emulatorDir);
+        var expandedExe = expandVariables(g, exePath, emulatorDir);
+        var expandedArgs = expandVariables(g, args, emulatorDir);
 
         // Working directory - use emulator install dir if not specified
         string? workDir = emulatorInstallDir;
