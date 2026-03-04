@@ -1119,7 +1119,10 @@ internal class ImportExportService
     {
         try
         {
-            _library.EnsureFileActionForExternalGame(g, exePath, workDir, action.Type == GameActionType.File ? _pathResolver.ExpandPathVariables(g, action.Arguments) : null);
+            var fileArgs = action.Type == GameActionType.File
+                ? EmulatorPathUtils.QuoteArgumentsIfNeeded(_pathResolver.ExpandPathVariables(g, action.Arguments))
+                : null;
+            _library.EnsureFileActionForExternalGame(g, exePath, workDir, fileArgs);
             if (_library.Settings.LaunchViaSteam && appId != 0) { _library.EnsureSteamPlayActionForExternalGame(g, appId); }
         }
         catch (Exception ex)
