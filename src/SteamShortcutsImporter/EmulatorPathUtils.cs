@@ -31,12 +31,20 @@ internal static class EmulatorPathUtils
             return string.Empty;
         }
 
-        if ((trimmed.StartsWith("\"") && trimmed.EndsWith("\"")) || !trimmed.Contains(" "))
+        // Already quoted
+        if (trimmed.StartsWith("\"") && trimmed.EndsWith("\""))
         {
             return trimmed;
         }
 
-        if (trimmed.Contains(" --") || trimmed.Contains(" -"))
+        // No spaces - no need to quote
+        if (!trimmed.Contains(" "))
+        {
+            return trimmed;
+        }
+
+        // Looks like flags or already has quoted parts - don't re-quote
+        if (trimmed.StartsWith("-") || trimmed.StartsWith("\""))
         {
             return trimmed;
         }
