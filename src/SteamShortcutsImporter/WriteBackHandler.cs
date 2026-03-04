@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading;
 
 namespace SteamShortcutsImporter;
@@ -144,7 +145,7 @@ internal class WriteBackHandler : IDisposable
     private void UpdateShortcutFromGame(Game game, SteamShortcut sc)
     {
         sc.AppName = game.Name;
-        // Prefer direct file action to refresh exe/args/dir
+        
         var act = game.GameActions?.FirstOrDefault(a => a.Type == GameActionType.File)
                   ?? game.GameActions?.FirstOrDefault(a => a.IsPlayAction)
                   ?? game.GameActions?.FirstOrDefault();
@@ -167,7 +168,7 @@ internal class WriteBackHandler : IDisposable
             sc.AppId = Utils.GenerateShortcutAppId(sc.Exe, sc.AppName);
         }
 
-        // Normalize play action to Steam URL when enabled
+        
         EnsureSteamPlayAction(game, sc);
     }
 
@@ -204,9 +205,15 @@ internal class WriteBackHandler : IDisposable
                 game.IsInstalled = true;
                 var newActions = new List<GameAction>();
                 
-                // If steam launch is enabled, add steam URL as primary and file action as secondary
-                if (true) // Assuming steam launch is enabled - this should be configurable
+                if (true)
                 {
+                    var directExe = sc.Exe?.Trim('"');
+                    if (IsRegexPattern(directExe))
+                    {
+                        directExe = ResolveExecutablePattern(directExe!, sc.StartDir ?? game.InstallDirectory, game.Name);
+                    }
+
+                    var directArgs = QuoteArgumentsIfNeeded(sc.LaunchOptions);
                     newActions.Add(new GameAction
                     {
                         Name = Constants.PlaySteamActionName,
@@ -218,8 +225,8 @@ internal class WriteBackHandler : IDisposable
                     {
                         Name = Constants.PlayDirectActionName,
                         Type = GameActionType.File,
-                        Path = sc.Exe?.Trim('"'),
-                        Arguments = sc.LaunchOptions,
+                        Path = directExe,
+                        Arguments = directArgs,
                         WorkingDir = sc.StartDir,
                         IsPlayAction = false
                     });
@@ -233,5 +240,61 @@ internal class WriteBackHandler : IDisposable
         {
             _logger.Warn(ex, $"Failed to ensure Steam play action for game '{game.Name}'");
         }
+    }
+
+    private static bool IsRegexPattern(string? s)
+    {
+        if (string.IsNullOrEmpty(s)) return false;
+        return s.StartsWith("^") || s.EndsWith("$") || s.Contains("\\.") || s.Contains(".*");
+    }
+
+    private string? ResolveExecutablePattern(string pattern, string? emulatorDir, string gameName)
+    {
+        if (string.IsNullOrEmpty(emulatorDir) || !Directory.Exists(emulatorDir))
+        {
+            return null;
+        }
+
+        try
+        {
+            var regexPattern = pattern;
+            if (!regexPattern.StartsWith("^")) regexPattern = "^" + regexPattern;
+            if (!regexPattern.EndsWith("$")) regexPattern = regexPattern + "$";
+
+            var regex = new Regex(regexPattern, RegexOptions.IgnoreCase);
+            foreach (var file in Directory.EnumerateFiles(emulatorDir, "*.exe", SearchOption.TopDirectoryOnly))
+            {
+                var fileName = Path.GetFileName(file);
+                if (regex.IsMatch(fileName))
+                {
+                    _logger.Info($"Resolved emulator pattern '{pattern}' to '{file}' for '{gameName}'");
+                    return file;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, $"Failed to resolve emulator pattern '{pattern}' for '{gameName}'");
+        }
+
+        return null;
+    }
+
+    private static string QuoteArgumentsIfNeeded(string? args)
+    {
+        if (string.IsNullOrWhiteSpace(args)) return args ?? string.Empty;
+
+        var trimmed = args.Trim();
+        if ((trimmed.StartsWith("\"") && trimmed.EndsWith("\"")) || !trimmed.Contains(" "))
+        {
+            return trimmed;
+        }
+
+        if (trimmed.Contains(" --") || trimmed.Contains(" -"))
+        {
+            return trimmed;
+        }
+
+        return "\"" + trimmed + "\"";
     }
 }
