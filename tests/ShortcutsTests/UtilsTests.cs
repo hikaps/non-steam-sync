@@ -48,7 +48,7 @@ public class UtilsTests
     [InlineData("\"C:\\Path\"", "C:\\Path")]
     [InlineData("/home/user/game", "/home/user/game")]
     [InlineData("\"/home/user/game\"", "/home/user/game")]
-    public void NormalizePath_HandlesQuotesAndWhitespace(string input, string expected)
+    public void NormalizePath_HandlesQuotesAndWhitespace(string? input, string expected)
     {
         Assert.Equal(expected, Utils.NormalizePath(input));
     }

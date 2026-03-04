@@ -9,14 +9,15 @@ internal static class DuplicateUtils
     /// Converts a path to its absolute form for comparison purposes.
     /// Removes surrounding quotes and resolves relative paths.
     /// </summary>
-    public static string GetAbsolutePath(string input)
+    public static string GetAbsolutePath(string? input)
     {
-        if (string.IsNullOrWhiteSpace(input)) return string.Empty;
-        var unq = input.Trim('"');
+        var normalizedInput = input ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(normalizedInput)) return string.Empty;
+        var unq = normalizedInput.Trim('"');
         try { return Path.GetFullPath(unq); } catch { return unq; }
     }
 
-    public static bool ArePathsEqual(string a, string b)
+    public static bool ArePathsEqual(string? a, string? b)
     {
         var an = GetAbsolutePath(a);
         var bn = GetAbsolutePath(b);
@@ -30,4 +31,3 @@ internal static class DuplicateUtils
         return $"steam://rungameid/{gid}";
     }
 }
-

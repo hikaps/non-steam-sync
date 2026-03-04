@@ -96,29 +96,16 @@ public class ShortcutsLibrary : LibraryPlugin
     /// </summary>
     internal List<string> GetSteamUserIds()
     {
-        var result = new List<string>();
         try
         {
             var root = Settings.SteamRootPath;
-            if (string.IsNullOrWhiteSpace(root)) return result;
-
-            var userdata = Path.Combine(root, Constants.UserDataDirectory);
-            if (!Directory.Exists(userdata)) return result;
-
-            foreach (var userDir in Directory.EnumerateDirectories(userdata))
-            {
-                var userId = Path.GetFileName(userDir);
-                if (Utils.TryConvertUserDataIdToSteamId64(userId, out var steamId64) && steamId64 != "0")
-                {
-                    result.Add(steamId64);
-                }
-            }
+            return EnumerateSteamUserIdsFromRoot(root);
         }
         catch (Exception ex)
         {
             Logger.Warn(ex, "Failed to enumerate Steam user IDs.");
+            return new List<string>();
         }
-        return result;
     }
 
     /// <summary>
@@ -134,27 +121,40 @@ public class ShortcutsLibrary : LibraryPlugin
     /// </summary>
     internal static List<string> GetSteamUserIdsForPath(string? steamRootPath)
     {
-        var result = new List<string>();
-        if (string.IsNullOrWhiteSpace(steamRootPath)) return result;
-
         try
         {
-            var userdata = Path.Combine(steamRootPath, Constants.UserDataDirectory);
-            if (!Directory.Exists(userdata)) return result;
-
-            foreach (var userDir in Directory.EnumerateDirectories(userdata))
-            {
-                var userId = Path.GetFileName(userDir);
-                if (Utils.TryConvertUserDataIdToSteamId64(userId, out var steamId64) && steamId64 != "0")
-                {
-                    result.Add(steamId64);
-                }
-            }
+            return EnumerateSteamUserIdsFromRoot(steamRootPath);
         }
         catch (Exception ex)
         {
             Logger.Warn(ex, "Failed to enumerate Steam user IDs.");
+            return new List<string>();
         }
+    }
+
+    private static List<string> EnumerateSteamUserIdsFromRoot(string? steamRootPath)
+    {
+        var result = new List<string>();
+        if (string.IsNullOrWhiteSpace(steamRootPath))
+        {
+            return result;
+        }
+
+        var userdata = Path.Combine(steamRootPath, Constants.UserDataDirectory);
+        if (!Directory.Exists(userdata))
+        {
+            return result;
+        }
+
+        foreach (var userDir in Directory.EnumerateDirectories(userdata))
+        {
+            var userId = Path.GetFileName(userDir);
+            if (Utils.TryConvertUserDataIdToSteamId64(userId, out var steamId64) && steamId64 != "0")
+            {
+                result.Add(steamId64);
+            }
+        }
+
         return result;
     }
 
