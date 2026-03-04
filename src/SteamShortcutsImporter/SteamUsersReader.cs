@@ -13,9 +13,15 @@ public class SteamUserAccount
 {
     public string UserId { get; set; } = string.Empty;
     public string AccountName { get; set; } = string.Empty;
-    public string DisplayName => string.IsNullOrEmpty(AccountName)
-        ? string.Format(Constants.SteamUserFallbackFormat, UserId)
-        : AccountName;
+    public string PersonaName { get; set; } = string.Empty;
+    /// <summary>
+    /// Display name prioritizes: PersonaName (Steam display name) > AccountName (login name) > fallback.
+    /// </summary>
+    public string DisplayName => !string.IsNullOrEmpty(PersonaName)
+        ? PersonaName
+        : !string.IsNullOrEmpty(AccountName)
+            ? AccountName
+            : string.Format(Constants.SteamUserFallbackFormat, UserId);
 }
 
 /// <summary>
@@ -81,7 +87,6 @@ internal static class SteamUsersReader
             }
             else
             {
-                // User has userdata folder but not in loginusers.vdf - add with fallback name
                 result.Add(new SteamUserAccount
                 {
                     UserId = userId,
@@ -89,7 +94,6 @@ internal static class SteamUsersReader
                 });
             }
         }
-
         return result;
     }
 
@@ -177,6 +181,10 @@ internal static class SteamUsersReader
                 if (string.Equals(key, "AccountName", StringComparison.OrdinalIgnoreCase))
                 {
                     currentUser.AccountName = value ?? string.Empty;
+                }
+                else if (string.Equals(key, "PersonaName", StringComparison.OrdinalIgnoreCase))
+                {
+                    currentUser.PersonaName = value ?? string.Empty;
                 }
             }
         }

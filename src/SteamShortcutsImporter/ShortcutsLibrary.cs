@@ -96,30 +96,16 @@ public class ShortcutsLibrary : LibraryPlugin
     /// </summary>
     internal List<string> GetSteamUserIds()
     {
-        var result = new List<string>();
         try
         {
             var root = Settings.SteamRootPath;
-            if (string.IsNullOrWhiteSpace(root)) return result;
-
-            var userdata = Path.Combine(root, Constants.UserDataDirectory);
-            if (!Directory.Exists(userdata)) return result;
-
-            foreach (var userDir in Directory.EnumerateDirectories(userdata))
-            {
-                var userId = Path.GetFileName(userDir);
-                // Filter out non-numeric directories (e.g., "ac" for anonymous)
-                if (!string.IsNullOrEmpty(userId) && userId.All(char.IsDigit))
-                {
-                    result.Add(userId);
-                }
-            }
+            return EnumerateSteamUserIdsFromRoot(root);
         }
         catch (Exception ex)
         {
             Logger.Warn(ex, "Failed to enumerate Steam user IDs.");
+            return new List<string>();
         }
-        return result;
     }
 
     /// <summary>
@@ -128,6 +114,48 @@ public class ShortcutsLibrary : LibraryPlugin
     internal static List<string> GetSteamUserIdsStatic()
     {
         return Instance?.GetSteamUserIds() ?? new List<string>();
+    }
+
+    /// <summary>
+    /// Gets all Steam user IDs from a specific Steam root path (static version for settings view).
+    /// </summary>
+    internal static List<string> GetSteamUserIdsForPath(string? steamRootPath)
+    {
+        try
+        {
+            return EnumerateSteamUserIdsFromRoot(steamRootPath);
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn(ex, "Failed to enumerate Steam user IDs.");
+            return new List<string>();
+        }
+    }
+
+    private static List<string> EnumerateSteamUserIdsFromRoot(string? steamRootPath)
+    {
+        var result = new List<string>();
+        if (string.IsNullOrWhiteSpace(steamRootPath))
+        {
+            return result;
+        }
+
+        var userdata = Path.Combine(steamRootPath, Constants.UserDataDirectory);
+        if (!Directory.Exists(userdata))
+        {
+            return result;
+        }
+
+        foreach (var userDir in Directory.EnumerateDirectories(userdata))
+        {
+            var userId = Path.GetFileName(userDir);
+            if (Utils.TryConvertUserDataIdToSteamId64(userId, out var steamId64) && steamId64 != "0")
+            {
+                result.Add(steamId64);
+            }
+        }
+
+        return result;
     }
 
     /// <summary>
@@ -140,7 +168,14 @@ public class ShortcutsLibrary : LibraryPlugin
             var root = Settings.SteamRootPath;
             if (string.IsNullOrWhiteSpace(root)) return null;
 
-            var vdfPath = Path.Combine(root, Constants.UserDataDirectory, userId, Constants.ConfigDirectory, "shortcuts.vdf");
+            // Convert SteamID64 to userdata folder account ID
+            string userDataFolderId = userId;
+            if (Utils.TryConvertSteamId64ToUserDataId(userId, out var accountId))
+            {
+                userDataFolderId = accountId;
+            }
+
+            var vdfPath = Path.Combine(root, Constants.UserDataDirectory, userDataFolderId, Constants.ConfigDirectory, "shortcuts.vdf");
             return vdfPath;
         }
         catch (Exception ex)

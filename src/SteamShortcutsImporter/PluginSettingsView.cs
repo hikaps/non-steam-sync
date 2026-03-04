@@ -418,7 +418,7 @@ public class PluginSettingsView : UserControl
         try
         {
             var steamPath = _pathBox?.Text;
-            var users = SteamUsersReader.GetValidUsers(steamPath, ShortcutsLibrary.GetSteamUserIdsStatic());
+            var users = SteamUsersReader.GetValidUsers(steamPath, ShortcutsLibrary.GetSteamUserIdsForPath(steamPath));
 
             _userComboBox.Items.Clear();
 

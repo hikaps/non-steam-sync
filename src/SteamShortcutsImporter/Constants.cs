@@ -120,4 +120,5 @@ internal static class Constants
     public const string SteamUserLabel = "Default Steam user:";
     public const string AutoDetectUserLabel = "(Auto-detect)";
     public const string SteamUserFallbackFormat = "Steam User {0}";
+    public const ulong SteamId64Base = 76561197960265728UL;
 }

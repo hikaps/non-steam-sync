@@ -80,7 +80,15 @@ internal class SteamPathResolver
                 return null;
             }
 
-            var vdfPath = Path.Combine(root, Constants.UserDataDirectory, userId, Constants.ConfigDirectory, "shortcuts.vdf");
+            // Convert SteamID64 to userdata folder account ID
+            // userId may be a SteamID64 (17-digit) or already an account ID
+            string userDataFolderId = userId ?? string.Empty;
+            if (Utils.TryConvertSteamId64ToUserDataId(userId, out var accountId))
+            {
+                userDataFolderId = accountId;
+            }
+
+            var vdfPath = Path.Combine(root, Constants.UserDataDirectory, userDataFolderId, Constants.ConfigDirectory, "shortcuts.vdf");
             if (File.Exists(vdfPath))
             {
                 return vdfPath;
@@ -88,7 +96,7 @@ internal class SteamPathResolver
 
             // User's shortcuts.vdf doesn't exist yet - return the path anyway
             // (it will be created on export)
-            var userDir = Path.Combine(root, Constants.UserDataDirectory, userId);
+            var userDir = Path.Combine(root, Constants.UserDataDirectory, userDataFolderId);
             if (Directory.Exists(userDir))
             {
                 return vdfPath;
@@ -215,7 +223,7 @@ internal class SteamPathResolver
             var gogExe = TryParseGogManifest(game.InstallDirectory, game.GameId);
             if (!string.IsNullOrEmpty(gogExe) && File.Exists(gogExe))
             {
-                Logger.Info($"Found exe via GOG manifest for '{game.Name}': {gogExe}");
+                Logger.Debug($"Found exe via GOG manifest for '{game.Name}': {gogExe}");
                 return gogExe;
             }
 
@@ -230,7 +238,7 @@ internal class SteamPathResolver
             // 3. Single candidate - use it
             if (candidates.Count == 1)
             {
-                Logger.Info($"Auto-selected single exe for '{game.Name}': {candidates[0]}");
+                Logger.Debug($"Auto-selected single exe for '{game.Name}': {candidates[0]}");
                 return candidates[0];
             }
 
@@ -238,7 +246,7 @@ internal class SteamPathResolver
             var bestMatch = SelectBestExecutable(candidates, game.Name, game.InstallDirectory);
             if (bestMatch != null)
             {
-                Logger.Info($"Auto-selected best match for '{game.Name}': {bestMatch}");
+                Logger.Debug($"Auto-selected best match for '{game.Name}': {bestMatch}");
                 return bestMatch;
             }
 

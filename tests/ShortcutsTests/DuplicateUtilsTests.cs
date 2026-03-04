@@ -37,7 +37,7 @@ public class DuplicateUtilsTests
     [InlineData("")]
     [InlineData(null!)]
     [InlineData("   ")]
-    public void GetAbsolutePath_EmptyOrWhitespace_ReturnsEmpty(string input)
+    public void GetAbsolutePath_EmptyOrWhitespace_ReturnsEmpty(string? input)
     {
         Assert.Equal(string.Empty, DuplicateUtils.GetAbsolutePath(input));
     }
