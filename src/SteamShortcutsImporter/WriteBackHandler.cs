@@ -158,7 +158,7 @@ internal class WriteBackHandler : IDisposable
                 try { dir = Path.GetDirectoryName(exe) ?? sc.StartDir; } catch (Exception ex) { _logger.Warn(ex, "Failed to get directory name."); dir = sc.StartDir; }
             }
             sc.Exe = exe;
-            sc.LaunchOptions = args;
+            sc.LaunchOptions = EmulatorPathUtils.QuoteArgumentsIfNeeded(args);
             sc.StartDir = dir ?? sc.StartDir;
         }
 

@@ -1070,7 +1070,8 @@ internal class ImportExportService
         }
         else if (action.Type == GameActionType.File)
         {
-            sc.LaunchOptions = _pathResolver.ExpandPathVariables(g, action.Arguments) ?? string.Empty;
+            var expandedArgs = _pathResolver.ExpandPathVariables(g, action.Arguments) ?? string.Empty;
+            sc.LaunchOptions = EmulatorPathUtils.QuoteArgumentsIfNeeded(expandedArgs);
         }
 
         try
