@@ -183,16 +183,6 @@ public class ShortcutsLibrary : LibraryPlugin
         return Instance?.PlayniteApi;
     }
 
-    private void CreateManagedBackup(string sourceFilePath, string userId)
-    {
-        _backupManager.CreateManagedBackup(sourceFilePath, userId);
-    }
-
-    private static string? TryGetSteamUserFromPath(string path)
-    {
-        return BackupManager.TryGetSteamUserFromPath(path);
-    }
-
     public override IEnumerable<MainMenuItem> GetMainMenuItems(GetMainMenuItemsArgs args)
     {
         yield return new MainMenuItem

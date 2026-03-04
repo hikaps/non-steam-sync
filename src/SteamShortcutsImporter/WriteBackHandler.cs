@@ -100,8 +100,9 @@ internal class WriteBackHandler : IDisposable
             }
 
             var shortcuts = ShortcutsFile.Read(vdfPath!).ToList();
-            var byStable = shortcuts.ToDictionary(s => s.StableId, s => s, StringComparer.OrdinalIgnoreCase);
-            var byApp = shortcuts.ToDictionary(s => s.AppId.ToString(), s => s, StringComparer.OrdinalIgnoreCase);
+            // Use GroupBy to handle duplicates safely (keep first occurrence)
+            var byStable = shortcuts.GroupBy(s => s.StableId, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+            var byApp = shortcuts.GroupBy(s => s.AppId.ToString(), StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
             bool changed = false;
 
             // Check all games from this library and sync any that changed
@@ -131,7 +132,7 @@ internal class WriteBackHandler : IDisposable
             if (changed)
             {
                 _logger.Info($"Writing debounced updates to shortcuts.vdf for {ourGames.Count} game(s).");
-                _importExportService.WriteShortcutsWithBackup(vdfPath!, shortcuts, new ExportContext());
+                _importExportService.WriteShortcutsWithBackup(vdfPath!, shortcuts);
             }
         }
         catch (Exception ex)
@@ -143,7 +144,7 @@ internal class WriteBackHandler : IDisposable
     private void UpdateShortcutFromGame(Game game, SteamShortcut sc)
     {
         sc.AppName = game.Name;
-        // Prefer direct file action to refresh exe/args/dir
+        
         var act = game.GameActions?.FirstOrDefault(a => a.Type == GameActionType.File)
                   ?? game.GameActions?.FirstOrDefault(a => a.IsPlayAction)
                   ?? game.GameActions?.FirstOrDefault();
@@ -157,7 +158,7 @@ internal class WriteBackHandler : IDisposable
                 try { dir = Path.GetDirectoryName(exe) ?? sc.StartDir; } catch (Exception ex) { _logger.Warn(ex, "Failed to get directory name."); dir = sc.StartDir; }
             }
             sc.Exe = exe;
-            sc.LaunchOptions = args;
+            sc.LaunchOptions = EmulatorPathUtils.QuoteArgumentsIfNeeded(args);
             sc.StartDir = dir ?? sc.StartDir;
         }
 
@@ -166,7 +167,7 @@ internal class WriteBackHandler : IDisposable
             sc.AppId = Utils.GenerateShortcutAppId(sc.Exe, sc.AppName);
         }
 
-        // Normalize play action to Steam URL when enabled
+        
         EnsureSteamPlayAction(game, sc);
     }
 
@@ -203,26 +204,29 @@ internal class WriteBackHandler : IDisposable
                 game.IsInstalled = true;
                 var newActions = new List<GameAction>();
                 
-                // If steam launch is enabled, add steam URL as primary and file action as secondary
-                if (true) // Assuming steam launch is enabled - this should be configurable
+                var directExe = sc.Exe?.Trim('"');
+                if (EmulatorPathUtils.IsRegexPattern(directExe))
                 {
-                    newActions.Add(new GameAction
-                    {
-                        Name = Constants.PlaySteamActionName,
-                        Type = GameActionType.URL,
-                        Path = expectedUrl,
-                        IsPlayAction = true
-                    });
-                    newActions.Add(new GameAction
-                    {
-                        Name = Constants.PlayDirectActionName,
-                        Type = GameActionType.File,
-                        Path = sc.Exe?.Trim('"'),
-                        Arguments = sc.LaunchOptions,
-                        WorkingDir = sc.StartDir,
-                        IsPlayAction = false
-                    });
+                    directExe = EmulatorPathUtils.ResolveExecutablePattern(directExe!, sc.StartDir ?? game.InstallDirectory, _logger, game.Name);
                 }
+
+                var directArgs = EmulatorPathUtils.QuoteArgumentsIfNeeded(sc.LaunchOptions);
+                newActions.Add(new GameAction
+                {
+                    Name = Constants.PlaySteamActionName,
+                    Type = GameActionType.URL,
+                    Path = expectedUrl,
+                    IsPlayAction = true
+                });
+                newActions.Add(new GameAction
+                {
+                    Name = Constants.PlayDirectActionName,
+                    Type = GameActionType.File,
+                    Path = directExe,
+                    Arguments = directArgs,
+                    WorkingDir = sc.StartDir,
+                    IsPlayAction = false
+                });
                 
                 game.GameActions = new System.Collections.ObjectModel.ObservableCollection<GameAction>(newActions);
                 _playniteApi?.Database?.Games?.Update(game);
@@ -233,4 +237,5 @@ internal class WriteBackHandler : IDisposable
             _logger.Warn(ex, $"Failed to ensure Steam play action for game '{game.Name}'");
         }
     }
+
 }

@@ -176,8 +176,6 @@ internal class SteamPathResolver
         }
     }
 
-    #region Executable Discovery
-
     /// <summary>
     /// Patterns for executables that are typically not the main game executable.
     /// </summary>
@@ -503,5 +501,4 @@ internal class SteamPathResolver
         return result;
     }
 
-    #endregion
 }

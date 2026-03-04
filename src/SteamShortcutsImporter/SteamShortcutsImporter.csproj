@@ -25,4 +25,7 @@
     <Reference Include="WindowsBase" />
     <Reference Include="System.Xaml" />
   </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="ShortcutsTests" />
+  </ItemGroup>
 </Project>
