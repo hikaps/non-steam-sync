@@ -1157,8 +1157,6 @@ internal class ImportExportService
         ShortcutsFile.Write(vdfPath, shortcuts);
     }
 
-    #region Nested Classes
-
     private sealed class ExportResult 
     { 
         public int Added; 
@@ -1196,6 +1194,4 @@ internal class ImportExportService
         public bool ShouldSelect => HasPlayableAction && !ExistsInSteam;
         public bool IsNew => ShouldSelect;
     }
-
-    #endregion
 }
