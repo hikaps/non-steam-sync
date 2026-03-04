@@ -5,7 +5,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text.RegularExpressions;
 using System.Threading;
 
 namespace SteamShortcutsImporter;
@@ -205,32 +204,29 @@ internal class WriteBackHandler : IDisposable
                 game.IsInstalled = true;
                 var newActions = new List<GameAction>();
                 
-                if (true)
+                var directExe = sc.Exe?.Trim('"');
+                if (EmulatorPathUtils.IsRegexPattern(directExe))
                 {
-                    var directExe = sc.Exe?.Trim('"');
-                    if (IsRegexPattern(directExe))
-                    {
-                        directExe = ResolveExecutablePattern(directExe!, sc.StartDir ?? game.InstallDirectory, game.Name);
-                    }
-
-                    var directArgs = QuoteArgumentsIfNeeded(sc.LaunchOptions);
-                    newActions.Add(new GameAction
-                    {
-                        Name = Constants.PlaySteamActionName,
-                        Type = GameActionType.URL,
-                        Path = expectedUrl,
-                        IsPlayAction = true
-                    });
-                    newActions.Add(new GameAction
-                    {
-                        Name = Constants.PlayDirectActionName,
-                        Type = GameActionType.File,
-                        Path = directExe,
-                        Arguments = directArgs,
-                        WorkingDir = sc.StartDir,
-                        IsPlayAction = false
-                    });
+                    directExe = EmulatorPathUtils.ResolveExecutablePattern(directExe!, sc.StartDir ?? game.InstallDirectory, _logger, game.Name);
                 }
+
+                var directArgs = EmulatorPathUtils.QuoteArgumentsIfNeeded(sc.LaunchOptions);
+                newActions.Add(new GameAction
+                {
+                    Name = Constants.PlaySteamActionName,
+                    Type = GameActionType.URL,
+                    Path = expectedUrl,
+                    IsPlayAction = true
+                });
+                newActions.Add(new GameAction
+                {
+                    Name = Constants.PlayDirectActionName,
+                    Type = GameActionType.File,
+                    Path = directExe,
+                    Arguments = directArgs,
+                    WorkingDir = sc.StartDir,
+                    IsPlayAction = false
+                });
                 
                 game.GameActions = new System.Collections.ObjectModel.ObservableCollection<GameAction>(newActions);
                 _playniteApi?.Database?.Games?.Update(game);
@@ -242,59 +238,4 @@ internal class WriteBackHandler : IDisposable
         }
     }
 
-    private static bool IsRegexPattern(string? s)
-    {
-        if (string.IsNullOrEmpty(s)) return false;
-        return s.StartsWith("^") || s.EndsWith("$") || s.Contains("\\.") || s.Contains(".*");
-    }
-
-    private string? ResolveExecutablePattern(string pattern, string? emulatorDir, string gameName)
-    {
-        if (string.IsNullOrEmpty(emulatorDir) || !Directory.Exists(emulatorDir))
-        {
-            return null;
-        }
-
-        try
-        {
-            var regexPattern = pattern;
-            if (!regexPattern.StartsWith("^")) regexPattern = "^" + regexPattern;
-            if (!regexPattern.EndsWith("$")) regexPattern = regexPattern + "$";
-
-            var regex = new Regex(regexPattern, RegexOptions.IgnoreCase);
-            foreach (var file in Directory.EnumerateFiles(emulatorDir, "*.exe", SearchOption.TopDirectoryOnly))
-            {
-                var fileName = Path.GetFileName(file);
-                if (regex.IsMatch(fileName))
-                {
-                    _logger.Info($"Resolved emulator pattern '{pattern}' to '{file}' for '{gameName}'");
-                    return file;
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.Warn(ex, $"Failed to resolve emulator pattern '{pattern}' for '{gameName}'");
-        }
-
-        return null;
-    }
-
-    private static string QuoteArgumentsIfNeeded(string? args)
-    {
-        if (string.IsNullOrWhiteSpace(args)) return args ?? string.Empty;
-
-        var trimmed = args.Trim();
-        if ((trimmed.StartsWith("\"") && trimmed.EndsWith("\"")) || !trimmed.Contains(" "))
-        {
-            return trimmed;
-        }
-
-        if (trimmed.Contains(" --") || trimmed.Contains(" -"))
-        {
-            return trimmed;
-        }
-
-        return "\"" + trimmed + "\"";
-    }
 }
