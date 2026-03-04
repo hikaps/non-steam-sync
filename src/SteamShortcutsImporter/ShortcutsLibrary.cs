@@ -132,6 +132,37 @@ public class ShortcutsLibrary : LibraryPlugin
     }
 
     /// <summary>
+    /// Gets all Steam user IDs from a specific Steam root path (static version for settings view).
+    /// </summary>
+    internal static List<string> GetSteamUserIdsForPath(string? steamRootPath)
+    {
+        var result = new List<string>();
+        if (string.IsNullOrWhiteSpace(steamRootPath)) return result;
+
+        try
+        {
+            var userdata = Path.Combine(steamRootPath, Constants.UserDataDirectory);
+            if (!Directory.Exists(userdata)) return result;
+
+            foreach (var userDir in Directory.EnumerateDirectories(userdata))
+            {
+                var userId = Path.GetFileName(userDir);
+                // Filter out non-numeric directories (e.g., "ac" for anonymous),
+                // "0" (system placeholder), and non-17-digit IDs (not valid Steam64 IDs)
+                if (!string.IsNullOrEmpty(userId) && userId != "0" && userId.Length == 17 && userId.All(char.IsDigit))
+                {
+                    result.Add(userId);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn(ex, "Failed to enumerate Steam user IDs.");
+        }
+        return result;
+    }
+
+    /// <summary>
     /// Gets the shortcuts.vdf path for a specific Steam user.
     /// </summary>
     internal string? GetShortcutsVdfPathForUser(string userId)
