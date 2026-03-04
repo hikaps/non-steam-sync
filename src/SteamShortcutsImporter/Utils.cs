@@ -35,6 +35,37 @@ internal static class Utils
         steamId64 = converted.ToString();
         return true;
     }
+
+    /// <summary>
+    /// Converts a SteamID64 back to the userdata folder account ID.
+    /// </summary>
+    public static bool TryConvertSteamId64ToUserDataId(string? steamId64, out string userDataId)
+    {
+        userDataId = string.Empty;
+        if (string.IsNullOrWhiteSpace(steamId64))
+        {
+            return false;
+        }
+
+        var trimmed = steamId64!.Trim();
+        if (!ulong.TryParse(trimmed, out var steamId64Value))
+        {
+            return false;
+        }
+
+        // SteamID64 = SteamId64Base + AccountID
+        // AccountID = SteamID64 - SteamId64Base
+        if (steamId64Value < Constants.SteamId64Base)
+        {
+            // Already an account ID (short form)
+            userDataId = trimmed;
+            return true;
+        }
+
+        var accountId = steamId64Value - Constants.SteamId64Base;
+        userDataId = accountId.ToString();
+        return true;
+    }
     /// <summary>
     /// Normalizes a path by removing surrounding quotes and trimming whitespace.
     /// Used to ensure consistent path representation before hashing or comparison.

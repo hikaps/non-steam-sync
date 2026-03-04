@@ -168,7 +168,14 @@ public class ShortcutsLibrary : LibraryPlugin
             var root = Settings.SteamRootPath;
             if (string.IsNullOrWhiteSpace(root)) return null;
 
-            var vdfPath = Path.Combine(root, Constants.UserDataDirectory, userId, Constants.ConfigDirectory, "shortcuts.vdf");
+            // Convert SteamID64 to userdata folder account ID
+            string userDataFolderId = userId;
+            if (Utils.TryConvertSteamId64ToUserDataId(userId, out var accountId))
+            {
+                userDataFolderId = accountId;
+            }
+
+            var vdfPath = Path.Combine(root, Constants.UserDataDirectory, userDataFolderId, Constants.ConfigDirectory, "shortcuts.vdf");
             return vdfPath;
         }
         catch (Exception ex)
