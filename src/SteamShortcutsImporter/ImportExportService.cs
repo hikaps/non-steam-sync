@@ -674,19 +674,28 @@ internal class ImportExportService
     /// Builds the result tuple for an emulator-based game action.
     /// Resolves the emulator profile to get the executable path, arguments, and working directory.
     /// </summary>
-    private (string exePath, string? workDir, string name, GameAction? action) BuildEmulatorActionResult(
+    internal (string exePath, string? workDir, string name, GameAction? action) BuildEmulatorActionResult(
+        Game g,
+        GameAction emulatorAction)
+    {
+        return BuildEmulatorActionResult(_library.PlayniteApi, Logger, g, emulatorAction);
+    }
+
+    internal static (string exePath, string? workDir, string name, GameAction? action) BuildEmulatorActionResult(
+        IPlayniteAPI playniteApi,
+        ILogger logger,
         Game g,
         GameAction emulatorAction)
     {
         var name = string.IsNullOrEmpty(g.Name) ? "Emulator Game" : g.Name;
 
         // Get emulator from database
-        var emulator = _library.PlayniteApi.Database.Emulators
+        var emulator = playniteApi.Database.Emulators
             .FirstOrDefault(e => e.Id == emulatorAction.EmulatorId);
 
         if (emulator == null)
         {
-            Logger.Warn($"Cannot export '{g.Name}': Emulator not found (EmulatorId={emulatorAction.EmulatorId})");
+            logger.Warn($"Cannot export '{g.Name}': Emulator not found (EmulatorId={emulatorAction.EmulatorId})");
             return (string.Empty, null, name, null);
         }
 
@@ -694,30 +703,42 @@ internal class ImportExportService
         var profile = emulator.GetProfile(emulatorAction.EmulatorProfileId);
         if (profile == null)
         {
-            Logger.Warn($"Cannot export '{g.Name}': Emulator profile not found (ProfileId={emulatorAction.EmulatorProfileId})");
+            logger.Warn($"Cannot export '{g.Name}': Emulator profile not found (ProfileId={emulatorAction.EmulatorProfileId})");
             return (string.Empty, null, name, null);
         }
 
         // Handle CustomEmulatorProfile
         if (profile is CustomEmulatorProfile customProfile)
         {
-            return BuildCustomEmulatorResult(g, emulatorAction, customProfile, emulator.InstallDir, name);
+            return BuildCustomEmulatorResult(playniteApi, logger, g, emulatorAction, customProfile, emulator.InstallDir, name);
         }
 
         // Handle BuiltInEmulatorProfile
         if (profile is BuiltInEmulatorProfile builtInProfile)
         {
-            return BuildBuiltInEmulatorResult(g, emulatorAction, builtInProfile, emulator.InstallDir, emulator.BuiltInConfigId, name);
+            return BuildBuiltInEmulatorResult(playniteApi, logger, playniteApi.Emulation, g, emulatorAction, builtInProfile, emulator.InstallDir, emulator.BuiltInConfigId, name);
         }
 
-        Logger.Warn($"Cannot export '{g.Name}': Unknown emulator profile type '{profile.GetType().Name}'");
+        logger.Warn($"Cannot export '{g.Name}': Unknown emulator profile type '{profile.GetType().Name}'");
         return (string.Empty, null, name, null);
     }
 
     /// <summary>
     /// Builds result for a custom emulator profile.
     /// </summary>
-    private (string exePath, string? workDir, string name, GameAction? action) BuildCustomEmulatorResult(
+    internal (string exePath, string? workDir, string name, GameAction? action) BuildCustomEmulatorResult(
+        Game g,
+        GameAction emulatorAction,
+        CustomEmulatorProfile profile,
+        string? emulatorInstallDir,
+        string name)
+    {
+        return BuildCustomEmulatorResult(_library.PlayniteApi, Logger, g, emulatorAction, profile, emulatorInstallDir, name);
+    }
+
+    internal static (string exePath, string? workDir, string name, GameAction? action) BuildCustomEmulatorResult(
+        IPlayniteAPI playniteApi,
+        ILogger logger,
         Game g,
         GameAction emulatorAction,
         CustomEmulatorProfile profile,
@@ -728,7 +749,7 @@ internal class ImportExportService
         var exePath = profile.Executable ?? string.Empty;
         if (string.IsNullOrWhiteSpace(exePath))
         {
-            Logger.Warn($"Cannot export '{g.Name}': Emulator profile has no executable set");
+            logger.Warn($"Cannot export '{g.Name}': Emulator profile has no executable set");
             return (string.Empty, null, name, null);
         }
 
@@ -744,30 +765,25 @@ internal class ImportExportService
             // Combine profile arguments with action's additional arguments
             var profileArgs = profile.Arguments ?? string.Empty;
             var additionalArgs = emulatorAction.AdditionalArguments ?? string.Empty;
-            args = string.IsNullOrWhiteSpace(additionalArgs) 
-                ? profileArgs 
+            args = string.IsNullOrWhiteSpace(additionalArgs)
+                ? profileArgs
                 : (string.IsNullOrWhiteSpace(profileArgs) ? additionalArgs : $"{profileArgs} {additionalArgs}");
         }
 
         // Expand variables using Playnite API
         var emulatorDir = emulatorInstallDir ?? string.Empty;
-        var expandedExe = _library.PlayniteApi.ExpandGameVariables(g, exePath, emulatorDir);
-        var expandedArgs = _library.PlayniteApi.ExpandGameVariables(g, args, emulatorDir);
+        var expandedExe = playniteApi.ExpandGameVariables(g, exePath, emulatorDir);
+        var expandedArgs = playniteApi.ExpandGameVariables(g, args, emulatorDir);
 
         // Get working directory
         string? workDir = profile.WorkingDirectory;
         if (!string.IsNullOrWhiteSpace(workDir))
         {
-            workDir = _library.PlayniteApi.ExpandGameVariables(g, workDir, emulatorDir);
+            workDir = playniteApi.ExpandGameVariables(g, workDir, emulatorDir);
         }
 
-        // For Steam shortcut, we need to combine exe + args into a launch command
-        // Store args separately for the shortcut's LaunchOptions
-        // The exePath is used as-is, and args go into LaunchOptions in CreateOrUpdateShortcut
+        logger.Info($"Resolved emulator for '{g.Name}': Exe={expandedExe}, Args={expandedArgs}");
 
-        Logger.Info($"Resolved emulator for '{g.Name}': Exe={expandedExe}, Args={expandedArgs}");
-
-        // We need to store the arguments somewhere since CreateOrUpdateShortcut reads from action.Arguments
         // Create a synthetic File action with the resolved paths
         var syntheticAction = new GameAction
         {
@@ -786,7 +802,21 @@ internal class ImportExportService
     /// Builds result for a built-in emulator profile.
     /// Built-in profiles use definitions from Playnite's emulator database.
     /// </summary>
-    private (string exePath, string? workDir, string name, GameAction? action) BuildBuiltInEmulatorResult(
+    internal (string exePath, string? workDir, string name, GameAction? action) BuildBuiltInEmulatorResult(
+        Game g,
+        GameAction emulatorAction,
+        BuiltInEmulatorProfile profile,
+        string? emulatorInstallDir,
+        string? builtInConfigId,
+        string name)
+    {
+        return BuildBuiltInEmulatorResult(_library.PlayniteApi, Logger, _library.PlayniteApi.Emulation, g, emulatorAction, profile, emulatorInstallDir, builtInConfigId, name);
+    }
+
+    internal static (string exePath, string? workDir, string name, GameAction? action) BuildBuiltInEmulatorResult(
+        IPlayniteAPI playniteApi,
+        ILogger logger,
+        IEmulationAPI emulationApi,
         Game g,
         GameAction emulatorAction,
         BuiltInEmulatorProfile profile,
@@ -797,15 +827,15 @@ internal class ImportExportService
         // Built-in profiles reference an emulator definition via the emulator's BuiltInConfigId
         if (string.IsNullOrEmpty(builtInConfigId))
         {
-            Logger.Warn($"Cannot export '{g.Name}': Emulator has no BuiltInConfigId set");
+            logger.Warn($"Cannot export '{g.Name}': Emulator has no BuiltInConfigId set");
             return (string.Empty, null, name, null);
         }
 
         // Get the emulator definition from Playnite's emulation database
-        var definition = _library.PlayniteApi.Emulation.GetEmulator(builtInConfigId);
+        var definition = emulationApi.GetEmulator(builtInConfigId);
         if (definition == null)
         {
-            Logger.Warn($"Cannot export '{g.Name}': Built-in emulator definition not found (Id={builtInConfigId})");
+            logger.Warn($"Cannot export '{g.Name}': Built-in emulator definition not found (Id={builtInConfigId})");
             return (string.Empty, null, name, null);
         }
 
@@ -813,7 +843,7 @@ internal class ImportExportService
         var profileDef = definition.Profiles?.FirstOrDefault(p => p.Name == profile.BuiltInProfileName);
         if (profileDef == null)
         {
-            Logger.Warn($"Cannot export '{g.Name}': Built-in emulator profile definition not found (Profile={profile.BuiltInProfileName})");
+            logger.Warn($"Cannot export '{g.Name}': Built-in emulator profile definition not found (Profile={profile.BuiltInProfileName})");
             return (string.Empty, null, name, null);
         }
 
@@ -821,7 +851,7 @@ internal class ImportExportService
         var exePath = profileDef.StartupExecutable ?? string.Empty;
         if (string.IsNullOrWhiteSpace(exePath))
         {
-            Logger.Warn($"Cannot export '{g.Name}': Built-in emulator profile has no startup executable");
+            logger.Warn($"Cannot export '{g.Name}': Built-in emulator profile has no startup executable");
             return (string.Empty, null, name, null);
         }
 
@@ -843,7 +873,7 @@ internal class ImportExportService
             var builtInArgs = profileDef.StartupArguments ?? string.Empty;
             var customArgs = profile.CustomArguments ?? string.Empty;
             var additionalArgs = emulatorAction.AdditionalArguments ?? string.Empty;
-            
+
             args = builtInArgs;
             if (!string.IsNullOrWhiteSpace(customArgs))
             {
@@ -857,13 +887,13 @@ internal class ImportExportService
 
         // Expand variables
         var emulatorDir = emulatorInstallDir ?? string.Empty;
-        var expandedExe = _library.PlayniteApi.ExpandGameVariables(g, exePath, emulatorDir);
-        var expandedArgs = _library.PlayniteApi.ExpandGameVariables(g, args, emulatorDir);
+        var expandedExe = playniteApi.ExpandGameVariables(g, exePath, emulatorDir);
+        var expandedArgs = playniteApi.ExpandGameVariables(g, args, emulatorDir);
 
         // Working directory - use emulator install dir if not specified
         string? workDir = emulatorInstallDir;
 
-        Logger.Info($"Resolved built-in emulator for '{g.Name}': Exe={expandedExe}, Args={expandedArgs}");
+        logger.Info($"Resolved built-in emulator for '{g.Name}': Exe={expandedExe}, Args={expandedArgs}");
 
         // Create a synthetic File action with the resolved paths
         var syntheticAction = new GameAction
