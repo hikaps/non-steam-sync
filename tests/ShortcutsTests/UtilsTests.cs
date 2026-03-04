@@ -5,11 +5,42 @@ namespace SteamShortcutsImporter.Tests;
 
 public class UtilsTests
 {
+    [Fact]
+    public void TryConvertUserDataIdToSteamId64_WithSteamId64_ReturnsSameValue()
+    {
+        var input = "76561198051525001";
+
+        var result = Utils.TryConvertUserDataIdToSteamId64(input, out var steamId64);
+
+        Assert.True(result);
+        Assert.Equal("76561198051525001", steamId64);
+    }
+
+    [Fact]
+    public void TryConvertUserDataIdToSteamId64_WithAccountId_ReturnsSteamId64()
+    {
+        var result = Utils.TryConvertUserDataIdToSteamId64("258645", out var steamId64);
+
+        Assert.True(result);
+        Assert.Equal("76561197960524373", steamId64);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("ac")]
+    [InlineData("1234abc")]
+    public void TryConvertUserDataIdToSteamId64_WithInvalidInput_ReturnsFalse(string input)
+    {
+        var result = Utils.TryConvertUserDataIdToSteamId64(input, out var steamId64);
+
+        Assert.False(result);
+        Assert.Equal(string.Empty, steamId64);
+    }
     [Theory]
     [InlineData("\"C:\\Games\\Foo.exe\"", "C:\\Games\\Foo.exe")]
     [InlineData("C:\\Games\\Foo.exe", "C:\\Games\\Foo.exe")]
     [InlineData("  C:\\Games\\Foo.exe  ", "C:\\Games\\Foo.exe")]
-    [InlineData("\"  C:\\Games\\Foo.exe  \"", "  C:\\Games\\Foo.exe  ")]  // Quotes removed first, then inner spaces preserved
+    [InlineData("\"  C:\\Games\\Foo.exe  \"", "  C:\\Games\\Foo.exe  ")]
     [InlineData("", "")]
     [InlineData(null!, "")]
     [InlineData("   ", "")]

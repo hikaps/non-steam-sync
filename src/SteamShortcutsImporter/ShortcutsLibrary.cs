@@ -108,11 +108,9 @@ public class ShortcutsLibrary : LibraryPlugin
             foreach (var userDir in Directory.EnumerateDirectories(userdata))
             {
                 var userId = Path.GetFileName(userDir);
-                // Filter out non-numeric directories (e.g., "ac" for anonymous),
-                // "0" (system placeholder), and non-17-digit IDs (not valid Steam64 IDs)
-                if (!string.IsNullOrEmpty(userId) && userId != "0" && userId.Length == 17 && userId.All(char.IsDigit))
+                if (Utils.TryConvertUserDataIdToSteamId64(userId, out var steamId64) && steamId64 != "0")
                 {
-                    result.Add(userId);
+                    result.Add(steamId64);
                 }
             }
         }
@@ -147,11 +145,9 @@ public class ShortcutsLibrary : LibraryPlugin
             foreach (var userDir in Directory.EnumerateDirectories(userdata))
             {
                 var userId = Path.GetFileName(userDir);
-                // Filter out non-numeric directories (e.g., "ac" for anonymous),
-                // "0" (system placeholder), and non-17-digit IDs (not valid Steam64 IDs)
-                if (!string.IsNullOrEmpty(userId) && userId != "0" && userId.Length == 17 && userId.All(char.IsDigit))
+                if (Utils.TryConvertUserDataIdToSteamId64(userId, out var steamId64) && steamId64 != "0")
                 {
-                    result.Add(userId);
+                    result.Add(steamId64);
                 }
             }
         }
