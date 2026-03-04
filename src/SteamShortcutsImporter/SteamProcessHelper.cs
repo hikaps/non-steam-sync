@@ -1,7 +1,6 @@
 using System;
 using System.Diagnostics;
 using System.IO;
-using System.Linq;
 
 namespace SteamShortcutsImporter;
 
@@ -10,6 +9,8 @@ namespace SteamShortcutsImporter;
 /// </summary>
 internal static class SteamProcessHelper
 {
+    private static readonly Playnite.SDK.ILogger Logger = Playnite.SDK.LogManager.GetLogger();
+
     /// <summary>
     /// Checks if the Steam client is currently running.
     /// </summary>
@@ -72,17 +73,14 @@ if (processes.Any())
     {
         try
         {
-            var logger = Playnite.SDK.LogManager.GetLogger();
-            
             // Check if Steam is running first
             if (!IsSteamRunning())
             {
-                logger.Info("Steam is not running, nothing to close.");
                 return false;
             }
 
             // Use Windows taskkill command to force-close Steam
-            logger.Info("Closing Steam using taskkill /F /IM Steam.exe");
+            Logger.Info("Closing Steam using taskkill /F /IM Steam.exe");
             
             var processStartInfo = new ProcessStartInfo
             {
@@ -98,7 +96,7 @@ if (processes.Any())
             {
                 if (process == null)
                 {
-                    logger.Warn("Failed to start taskkill process");
+                    Logger.Warn("Failed to start taskkill process");
                     return false;
                 }
 
@@ -109,15 +107,15 @@ if (processes.Any())
                 
                 if (!string.IsNullOrWhiteSpace(output))
                 {
-                    logger.Info($"taskkill output: {output}");
+                    Logger.Debug($"taskkill output: {output}");
                 }
                 
                 if (!string.IsNullOrWhiteSpace(error))
                 {
-                    logger.Warn($"taskkill error: {error}");
+                    Logger.Warn($"taskkill error: {error}");
                 }
                 
-                logger.Info($"taskkill exit code: {process.ExitCode}");
+                Logger.Info($"taskkill exit code: {process.ExitCode}");
             }
             
             // Give Windows a moment to clean up the process
@@ -126,14 +124,12 @@ if (processes.Any())
             // Verify Steam closed
             if (IsSteamRunning())
             {
-                logger.Warn("Steam still running after taskkill");
+                Logger.Warn("Steam still running after taskkill");
                 return false;
             }
-            else
-            {
-                logger.Info("Steam closed successfully");
-                return true;
-            }
+
+            Logger.Info("Steam closed successfully");
+            return true;
         }
         catch (Exception ex)
         {

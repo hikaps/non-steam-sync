@@ -246,11 +246,7 @@ internal class ImportExportService
                         return;
                     }
 
-                    if (res.WasSteamRunning)
-                    {
-                        Logger.Info("Restarting Steam after export...");
-                        SteamProcessHelper.TryLaunchSteam(_library.Settings.SteamRootPath);
-                    }
+                    RestartSteamIfNeeded(res.WasSteamRunning);
 
                     var msg = $"Steam shortcuts updated. Created: {res.Added}, Updated: {res.Updated}, Skipped: {res.Skipped}.";
                     _library.PlayniteApi.Dialogs.ShowMessage(msg, _library.Name);
@@ -282,11 +278,7 @@ internal class ImportExportService
             return;
         }
 
-        if (res.WasSteamRunning)
-        {
-            Logger.Info("Restarting Steam after export...");
-            SteamProcessHelper.TryLaunchSteam(_library.Settings.SteamRootPath);
-        }
+        RestartSteamIfNeeded(res.WasSteamRunning);
 
         var msg = $"Added: {res.Added}, Updated: {res.Updated}";
         if (res.Skipped > 0)
@@ -449,6 +441,17 @@ internal class ImportExportService
         return result == System.Windows.MessageBoxResult.Yes;
     }
 
+    private void RestartSteamIfNeeded(bool wasSteamRunning)
+    {
+        if (!wasSteamRunning)
+        {
+            return;
+        }
+
+        Logger.Info("Restarting Steam after export...");
+        SteamProcessHelper.TryLaunchSteam(_library.Settings.SteamRootPath);
+    }
+
     private ExportResult AddGamesToSteamCore(IEnumerable<Game> games)
     {
         var vdfPath = _pathResolver.ResolveShortcutsVdfPathForUser(_library.Settings.SelectedSteamUserId);
@@ -459,7 +462,6 @@ internal class ImportExportService
 
         if (!ConfirmSteamRestart())
         {
-            Logger.Info("User cancelled export.");
             return new ExportResult();
         }
 
@@ -496,7 +498,7 @@ internal class ImportExportService
                 skipped++;
                 var reason = GetSkipReason(g, result);
                 skippedGames.Add($"{g.Name}: {reason}");
-                Logger.Info($"Skipping '{g.Name}': {reason}");
+                Logger.Debug($"Skipping '{g.Name}': {reason}");
                 continue;
             }
 
@@ -505,7 +507,7 @@ internal class ImportExportService
             UpdateGameActions(g, appId, exePath, workDir, action);
         }
 
-        WriteShortcutsWithBackup(vdfPath!, shortcuts, context);
+        WriteShortcutsWithBackup(vdfPath!, shortcuts);
         return new ExportResult { Added = added, Updated = updated, Skipped = skipped, SkippedGames = skippedGames, WasSteamRunning = wasSteamRunning };
     }
 
@@ -1140,7 +1142,7 @@ internal class ImportExportService
             || val.StartsWith("steam://", StringComparison.OrdinalIgnoreCase);
     }
 
-    public void WriteShortcutsWithBackup(string vdfPath, List<SteamShortcut> shortcuts, ExportContext context)
+    public void WriteShortcutsWithBackup(string vdfPath, List<SteamShortcut> shortcuts)
     {
         try
         {

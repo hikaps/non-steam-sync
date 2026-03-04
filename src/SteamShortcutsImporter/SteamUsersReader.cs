@@ -51,7 +51,7 @@ internal static class SteamUsersReader
             // Read with UTF-8 BOM detection
             var content = File.ReadAllText(loginusersPath, Encoding.UTF8);
             ParseLoginUsers(content, result);
-            Logger.Info($"Read {result.Count} user(s) from loginusers.vdf");
+            Logger.Debug($"Read {result.Count} user(s) from loginusers.vdf");
         }
         catch (Exception ex)
         {

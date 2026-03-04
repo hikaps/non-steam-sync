@@ -132,7 +132,7 @@ internal class WriteBackHandler : IDisposable
             if (changed)
             {
                 _logger.Info($"Writing debounced updates to shortcuts.vdf for {ourGames.Count} game(s).");
-                _importExportService.WriteShortcutsWithBackup(vdfPath!, shortcuts, new ExportContext());
+                _importExportService.WriteShortcutsWithBackup(vdfPath!, shortcuts);
             }
         }
         catch (Exception ex)
