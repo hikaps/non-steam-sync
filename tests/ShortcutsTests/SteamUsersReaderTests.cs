@@ -38,6 +38,9 @@ public class SteamUsersReaderTests
             Assert.True(result.ContainsKey("98765432109876543"));
             Assert.Equal("testuser1", result["12345678901234567"].AccountName);
             Assert.Equal("testuser2", result["98765432109876543"].AccountName);
+            Assert.Equal("Test User 1", result["12345678901234567"].PersonaName);
+            Assert.Equal("Test User 2", result["98765432109876543"].PersonaName);
+            Assert.Equal("Test User 1", result["12345678901234567"].DisplayName);
         }
         finally
         {
@@ -213,6 +216,34 @@ public class SteamUsersReaderTests
                 Directory.Delete(tempRoot, recursive: true);
         }
     }
+
+    [Fact]
+    public void ReadUsers_RealWorldFormat_WithTabsAndExtraFields()
+    {
+        var tempRoot = Path.Combine(Path.GetTempPath(), "steam_users_test_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var configDir = Path.Combine(tempRoot, "config");
+            Directory.CreateDirectory(configDir);
+
+            // Exact format from user's real loginusers.vdf with tabs
+            var loginusersContent = "\"users\"\n{\n\t\"76561198051525001\"\n\t{\n\t\t\"AccountName\"\t\t\"testuser1\"\n\t\t\"PersonaName\"\t\t\"Test Display 1\"\n\t\t\"RememberPassword\"\t\t\"1\"\n\t\t\"WantsOfflineMode\"\t\t\"0\"\n\t\t\"SkipOfflineModeWarning\"\t\t\"0\"\n\t\t\"AllowAutoLogin\"\t\t\"1\"\n\t\t\"MostRecent\"\t\t\"1\"\n\t\t\"Timestamp\"\t\t\"1772589956\"\n\t}\n\t\"76561198391833687\"\n\t{\n\t\t\"AccountName\"\t\t\"testuser2\"\n\t\t\"PersonaName\"\t\t\"Test Display 2\"\n\t\t\"RememberPassword\"\t\t\"1\"\n\t\t\"WantsOfflineMode\"\t\t\"0\"\n\t\t\"SkipOfflineModeWarning\"\t\t\"0\"\n\t\t\"AllowAutoLogin\"\t\t\"0\"\n\t\t\"MostRecent\"\t\t\"0\"\n\t\t\"Timestamp\"\t\t\"1771962844\"\n\t}\n}";
+            File.WriteAllText(Path.Combine(configDir, "loginusers.vdf"), loginusersContent);
+
+            var result = SteamUsersReader.ReadUsers(tempRoot);
+
+            Assert.Equal(2, result.Count);
+            Assert.Equal("testuser1", result["76561198051525001"].AccountName);
+            Assert.Equal("Test Display 1", result["76561198051525001"].PersonaName);
+            Assert.Equal("Test Display 1", result["76561198051525001"].DisplayName);
+            Assert.Equal("Test Display 2", result["76561198391833687"].DisplayName);
+        }
+        finally
+        {
+            if (Directory.Exists(tempRoot))
+                Directory.Delete(tempRoot, recursive: true);
+        }
+    }
 }
 
 public class SteamUserAccountTests
@@ -239,5 +270,32 @@ public class SteamUserAccountTests
         };
 
         Assert.Equal("Steam User 12345678901234567", account.DisplayName);
+    }
+
+    [Fact]
+    public void DisplayName_WithPersonaName_ReturnsPersonaName()
+    {
+        var account = new SteamUserAccount
+        {
+            UserId = "12345678901234567",
+            AccountName = "loginname",
+            PersonaName = "Display Name"
+        };
+
+        Assert.Equal("Display Name", account.DisplayName);
+    }
+
+    [Fact]
+    public void DisplayName_PersonaNameOverridesAccountName()
+    {
+        var account = new SteamUserAccount
+        {
+            UserId = "12345678901234567",
+            AccountName = "loginname",
+            PersonaName = "Friendly Name"
+        };
+
+        // PersonaName should take priority over AccountName
+        Assert.Equal("Friendly Name", account.DisplayName);
     }
 }

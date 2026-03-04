@@ -58,6 +58,10 @@ internal static class SteamUsersReader
             var content = File.ReadAllText(loginusersPath, Encoding.UTF8);
             ParseLoginUsers(content, result);
             Logger.Info($"Read {result.Count} user(s) from loginusers.vdf");
+            foreach (var user in result.Values)
+            {
+                Logger.Debug($"User {user.UserId}: AccountName={user.AccountName ?? "(null)"}, PersonaName={user.PersonaName ?? "(null)"}, DisplayName={user.DisplayName}");
+            }
         }
         catch (Exception ex)
         {
@@ -88,6 +92,7 @@ internal static class SteamUsersReader
             else
             {
                 // User has userdata folder but not in loginusers.vdf - add with fallback name
+                Logger.Debug($"User {userId} not found in loginusers.vdf, using fallback name");
                 result.Add(new SteamUserAccount
                 {
                     UserId = userId,
@@ -96,6 +101,7 @@ internal static class SteamUsersReader
             }
         }
 
+        Logger.Info($"GetValidUsers: steamRootPath={steamRootPath ?? "(null)"}, validIds={validIdSet.Count}, readFromVdf={users.Count}, result={result.Count}");
         return result;
     }
 
