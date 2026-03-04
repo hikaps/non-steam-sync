@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using Playnite.SDK;
 
 namespace SteamShortcutsImporter;
 
@@ -10,6 +11,8 @@ namespace SteamShortcutsImporter;
 /// </summary>
 internal static class SteamProcessHelper
 {
+    private static readonly ILogger Logger = LogManager.GetLogger();
+
     /// <summary>
     /// Checks if the Steam client is currently running.
     /// </summary>
@@ -46,7 +49,7 @@ if (processes.Any())
         catch (Exception ex)
         {
             // If we can't determine, assume not running (fail safe)
-            Playnite.SDK.LogManager.GetLogger().Warn(ex, "Failed to check if Steam is running.");
+            Logger.Warn(ex, "Failed to check if Steam is running.");
             return false;
         }
     }
@@ -72,17 +75,15 @@ if (processes.Any())
     {
         try
         {
-            var logger = Playnite.SDK.LogManager.GetLogger();
-            
             // Check if Steam is running first
             if (!IsSteamRunning())
             {
-                logger.Info("Steam is not running, nothing to close.");
+                Logger.Debug("Steam is not running, nothing to close.");
                 return false;
             }
 
             // Use Windows taskkill command to force-close Steam
-            logger.Info("Closing Steam using taskkill /F /IM Steam.exe");
+            Logger.Debug("Closing Steam using taskkill /F /IM Steam.exe");
             
             var processStartInfo = new ProcessStartInfo
             {
@@ -98,7 +99,7 @@ if (processes.Any())
             {
                 if (process == null)
                 {
-                    logger.Warn("Failed to start taskkill process");
+                    Logger.Warn("Failed to start taskkill process");
                     return false;
                 }
 
@@ -109,15 +110,15 @@ if (processes.Any())
                 
                 if (!string.IsNullOrWhiteSpace(output))
                 {
-                    logger.Info($"taskkill output: {output}");
+                    Logger.Debug($"taskkill output: {output}");
                 }
                 
                 if (!string.IsNullOrWhiteSpace(error))
                 {
-                    logger.Warn($"taskkill error: {error}");
+                    Logger.Warn($"taskkill error: {error}");
                 }
                 
-                logger.Info($"taskkill exit code: {process.ExitCode}");
+                Logger.Debug($"taskkill exit code: {process.ExitCode}");
             }
             
             // Give Windows a moment to clean up the process
@@ -126,18 +127,18 @@ if (processes.Any())
             // Verify Steam closed
             if (IsSteamRunning())
             {
-                logger.Warn("Steam still running after taskkill");
+                Logger.Warn("Steam still running after taskkill");
                 return false;
             }
             else
             {
-                logger.Info("Steam closed successfully");
+                Logger.Debug("Steam closed successfully");
                 return true;
             }
         }
         catch (Exception ex)
         {
-            Playnite.SDK.LogManager.GetLogger().Warn(ex, "Failed to close Steam using taskkill");
+            Logger.Warn(ex, "Failed to close Steam using taskkill");
             return false;
         }
     }
@@ -151,13 +152,13 @@ if (processes.Any())
     {
         if (Environment.OSVersion.Platform != PlatformID.Win32NT)
         {
-            Playnite.SDK.LogManager.GetLogger().Info("Steam launch is only supported on Windows.");
+            Logger.Debug("Steam launch is only supported on Windows.");
             return false;
         }
 
         if (string.IsNullOrWhiteSpace(steamRootPath))
         {
-            Playnite.SDK.LogManager.GetLogger().Warn("Cannot launch Steam: Steam root path is null or empty.");
+            Logger.Warn("Cannot launch Steam: Steam root path is null or empty.");
             return false;
         }
 
@@ -167,17 +168,17 @@ if (processes.Any())
             
             if (!File.Exists(steamExePath))
             {
-                Playnite.SDK.LogManager.GetLogger().Warn($"Cannot launch Steam: Steam.exe not found at {steamExePath}");
+                Logger.Warn($"Cannot launch Steam: Steam.exe not found at {steamExePath}");
                 return false;
             }
 
             Process.Start(steamExePath);
-            Playnite.SDK.LogManager.GetLogger().Info($"Launched Steam from {steamExePath}");
+            Logger.Debug($"Launched Steam from {steamExePath}");
             return true;
         }
         catch (Exception ex)
         {
-            Playnite.SDK.LogManager.GetLogger().Error(ex, "Failed to launch Steam.");
+            Logger.Error(ex, "Failed to launch Steam.");
             return false;
         }
     }

@@ -6,7 +6,6 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
-using System.Threading;
 
 namespace SteamShortcutsImporter;
 
@@ -217,17 +216,6 @@ public class ShortcutsLibrary : LibraryPlugin
     {
         return Instance?.PlayniteApi;
     }
-
-    private void CreateManagedBackup(string sourceFilePath, string userId)
-    {
-        _backupManager.CreateManagedBackup(sourceFilePath, userId);
-    }
-
-    private static string? TryGetSteamUserFromPath(string path)
-    {
-        return BackupManager.TryGetSteamUserFromPath(path);
-    }
-
     public override IEnumerable<MainMenuItem> GetMainMenuItems(GetMainMenuItemsArgs args)
     {
         yield return new MainMenuItem
@@ -331,7 +319,7 @@ public class ShortcutsLibrary : LibraryPlugin
 
         try
         {
-            Logger.Info($"Reading shortcuts from: {vdfPath}");
+            Logger.Debug($"Reading shortcuts from: {vdfPath}");
             var shortcuts = ShortcutsFile.Read(vdfPath!);
 
             var metas = new List<GameMetadata>();
@@ -375,7 +363,7 @@ public class ShortcutsLibrary : LibraryPlugin
                 seenIds.Add(chosenId);
             }
 
-            Logger.Info($"Imported {metas.Count} shortcuts as games.");
+            Logger.Debug($"Imported {metas.Count} shortcuts as games.");
             return metas;
         }
         catch (Exception ex)

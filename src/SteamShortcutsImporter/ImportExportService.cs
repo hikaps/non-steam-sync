@@ -59,18 +59,8 @@ internal class ImportExportService
                     return existsAny ? baseText + Constants.PlayniteTag : baseText;
                 },
                 previewImage: sc => _artworkManager.TryPickGridPreview(sc.AppId, gridDir),
-                isInitiallyChecked: sc =>
-                {
-                    var existsAny = detector.ExistsAnyGameMatch(sc);
-                    var isAlready = !string.IsNullOrEmpty(sc.StableId) && _library.PlayniteApi.Database.Games.Any(g => g.PluginId == _library.Id && string.Equals(g.GameId, sc.StableId, StringComparison.OrdinalIgnoreCase));
-                    return !isAlready && !existsAny;
-                },
-                isNew: sc =>
-                {
-                    var existsAny = detector.ExistsAnyGameMatch(sc);
-                    var isAlready = !string.IsNullOrEmpty(sc.StableId) && _library.PlayniteApi.Database.Games.Any(g => g.PluginId == _library.Id && string.Equals(g.GameId, sc.StableId, StringComparison.OrdinalIgnoreCase));
-                    return !isAlready && !existsAny;
-                },
+                isInitiallyChecked: ShouldImportShortcut,
+                isNew: ShouldImportShortcut,
                 confirmLabel: Constants.ImportConfirmLabel,
                 onConfirm: selected =>
                 {
@@ -78,6 +68,15 @@ internal class ImportExportService
                     var msg = skipped > 0 ? $"Imported {imported} item(s). Skipped {skipped} existing item(s)." : $"Imported {imported} item(s) from Steam.";
                     _library.PlayniteApi.Dialogs.ShowMessage(msg, _library.Name);
                 });
+
+            bool ShouldImportShortcut(SteamShortcut sc)
+            {
+                var existsAny = detector.ExistsAnyGameMatch(sc);
+                var isAlready = !string.IsNullOrEmpty(sc.StableId)
+                    && _library.PlayniteApi.Database.Games.Any(g => g.PluginId == _library.Id && string.Equals(g.GameId, sc.StableId, StringComparison.OrdinalIgnoreCase));
+
+                return !isAlready && !existsAny;
+            }
         }
         catch (Exception ex)
         {
@@ -248,7 +247,7 @@ internal class ImportExportService
 
                     if (res.WasSteamRunning)
                     {
-                        Logger.Info("Restarting Steam after export...");
+                        Logger.Debug("Restarting Steam after export...");
                         SteamProcessHelper.TryLaunchSteam(_library.Settings.SteamRootPath);
                     }
 
@@ -284,7 +283,7 @@ internal class ImportExportService
 
         if (res.WasSteamRunning)
         {
-            Logger.Info("Restarting Steam after export...");
+            Logger.Debug("Restarting Steam after export...");
             SteamProcessHelper.TryLaunchSteam(_library.Settings.SteamRootPath);
         }
 
@@ -459,14 +458,14 @@ internal class ImportExportService
 
         if (!ConfirmSteamRestart())
         {
-            Logger.Info("User cancelled export.");
+            Logger.Debug("User cancelled export.");
             return new ExportResult();
         }
 
         var wasSteamRunning = SteamProcessHelper.IsSteamRunning();
         if (wasSteamRunning)
         {
-            Logger.Info("Closing Steam before export...");
+            Logger.Debug("Closing Steam before export...");
             SteamProcessHelper.TryCloseSteam();
         }
 
@@ -496,7 +495,7 @@ internal class ImportExportService
                 skipped++;
                 var reason = GetSkipReason(g, result);
                 skippedGames.Add($"{g.Name}: {reason}");
-                Logger.Info($"Skipping '{g.Name}': {reason}");
+                Logger.Debug($"Skipping '{g.Name}': {reason}");
                 continue;
             }
 
@@ -505,7 +504,7 @@ internal class ImportExportService
             UpdateGameActions(g, appId, exePath, workDir, action);
         }
 
-        WriteShortcutsWithBackup(vdfPath!, shortcuts, context);
+        WriteShortcutsWithBackup(vdfPath!, shortcuts);
         return new ExportResult { Added = added, Updated = updated, Skipped = skipped, SkippedGames = skippedGames, WasSteamRunning = wasSteamRunning };
     }
 
@@ -555,7 +554,7 @@ internal class ImportExportService
             var result = BuildUrlActionResult(g, urlAction, existing, byPlayniteId);
             if (result.action != null)
             {
-                Logger.Info($"Using URL action for '{g.Name}': {urlAction.Path}");
+                Logger.Debug($"Using URL action for '{g.Name}': {urlAction.Path}");
                 return (result.exePath, result.workDir, result.name, result.action, ExeDiscoveryResult.Success);
             }
         }
@@ -650,8 +649,8 @@ internal class ImportExportService
             var workDir = !string.IsNullOrEmpty(g.InstallDirectory) && Directory.Exists(g.InstallDirectory) 
                 ? g.InstallDirectory 
                 : null;
-            
-            Logger.Info($"Creating URL shortcut for '{g.Name}': {url}");
+
+            Logger.Debug($"Creating URL shortcut for '{g.Name}': {url}");
             return (url, workDir, name, urlAction);
         }
 
@@ -733,8 +732,8 @@ internal class ImportExportService
             
             game.GameActions = new ObservableCollection<GameAction>(actions);
             _library.PlayniteApi.Database.Games.Update(game);
-            
-            Logger.Info($"Persisted new GameAction for '{game.Name}': {exePath}");
+
+            Logger.Debug($"Persisted new GameAction for '{game.Name}': {exePath}");
         }
         catch (Exception ex)
         {
@@ -849,7 +848,7 @@ internal class ImportExportService
             || val.StartsWith("steam://", StringComparison.OrdinalIgnoreCase);
     }
 
-    public void WriteShortcutsWithBackup(string vdfPath, List<SteamShortcut> shortcuts, ExportContext context)
+    public void WriteShortcutsWithBackup(string vdfPath, List<SteamShortcut> shortcuts)
     {
         try
         {

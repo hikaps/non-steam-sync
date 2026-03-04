@@ -130,8 +130,8 @@ internal class WriteBackHandler : IDisposable
 
             if (changed)
             {
-                _logger.Info($"Writing debounced updates to shortcuts.vdf for {ourGames.Count} game(s).");
-                _importExportService.WriteShortcutsWithBackup(vdfPath!, shortcuts, new ExportContext());
+                _logger.Debug($"Writing debounced updates to shortcuts.vdf for {ourGames.Count} game(s).");
+                _importExportService.WriteShortcutsWithBackup(vdfPath!, shortcuts);
             }
         }
         catch (Exception ex)
@@ -201,19 +201,16 @@ internal class WriteBackHandler : IDisposable
             {
                 game ??= new Game();
                 game.IsInstalled = true;
-                var newActions = new List<GameAction>();
-                
-                // If steam launch is enabled, add steam URL as primary and file action as secondary
-                if (true) // Assuming steam launch is enabled - this should be configurable
+                var newActions = new List<GameAction>
                 {
-                    newActions.Add(new GameAction
+                    new GameAction
                     {
                         Name = Constants.PlaySteamActionName,
                         Type = GameActionType.URL,
                         Path = expectedUrl,
                         IsPlayAction = true
-                    });
-                    newActions.Add(new GameAction
+                    },
+                    new GameAction
                     {
                         Name = Constants.PlayDirectActionName,
                         Type = GameActionType.File,
@@ -221,9 +218,9 @@ internal class WriteBackHandler : IDisposable
                         Arguments = sc.LaunchOptions,
                         WorkingDir = sc.StartDir,
                         IsPlayAction = false
-                    });
-                }
-                
+                    }
+                };
+
                 game.GameActions = new System.Collections.ObjectModel.ObservableCollection<GameAction>(newActions);
                 _playniteApi?.Database?.Games?.Update(game);
             }

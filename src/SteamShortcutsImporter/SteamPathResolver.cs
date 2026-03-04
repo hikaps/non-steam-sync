@@ -225,7 +225,7 @@ internal class SteamPathResolver
             var gogExe = TryParseGogManifest(game.InstallDirectory, game.GameId);
             if (!string.IsNullOrEmpty(gogExe) && File.Exists(gogExe))
             {
-                Logger.Info($"Found exe via GOG manifest for '{game.Name}': {gogExe}");
+                Logger.Debug($"Found exe via GOG manifest for '{game.Name}': {gogExe}");
                 return gogExe;
             }
 
@@ -240,7 +240,7 @@ internal class SteamPathResolver
             // 3. Single candidate - use it
             if (candidates.Count == 1)
             {
-                Logger.Info($"Auto-selected single exe for '{game.Name}': {candidates[0]}");
+                Logger.Debug($"Auto-selected single exe for '{game.Name}': {candidates[0]}");
                 return candidates[0];
             }
 
@@ -248,7 +248,7 @@ internal class SteamPathResolver
             var bestMatch = SelectBestExecutable(candidates, game.Name, game.InstallDirectory);
             if (bestMatch != null)
             {
-                Logger.Info($"Auto-selected best match for '{game.Name}': {bestMatch}");
+                Logger.Debug($"Auto-selected best match for '{game.Name}': {bestMatch}");
                 return bestMatch;
             }
 
