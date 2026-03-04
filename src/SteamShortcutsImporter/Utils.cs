@@ -14,21 +14,21 @@ internal static class Utils
             return false;
         }
 
-        var trimmed = userDataId!.Trim();
+        var trimmed = userDataId?.Trim() ?? string.Empty;
         if (!trimmed.All(char.IsDigit))
         {
             return false;
         }
 
-        if (trimmed.Length == 17)
-        {
-            steamId64 = trimmed;
-            return true;
-        }
-
         if (!ulong.TryParse(trimmed, out var accountId))
         {
             return false;
+        }
+
+        if (accountId >= Constants.SteamId64Base)
+        {
+            steamId64 = accountId.ToString();
+            return true;
         }
 
         var converted = Constants.SteamId64Base + accountId;

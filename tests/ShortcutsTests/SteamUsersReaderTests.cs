@@ -18,12 +18,12 @@ public class SteamUsersReaderTests
 
             var loginusersContent = @"""users""
 {
-    ""12345678901234567""
+    ""76561198000000001""
     {
         ""AccountName""       ""testuser1""
         ""PersonaName""       ""Test User 1""
     }
-    ""98765432109876543""
+    ""76561198000000002""
     {
         ""AccountName""       ""testuser2""
         ""PersonaName""       ""Test User 2""
@@ -34,13 +34,13 @@ public class SteamUsersReaderTests
             var result = SteamUsersReader.ReadUsers(tempRoot);
 
             Assert.Equal(2, result.Count);
-            Assert.True(result.ContainsKey("12345678901234567"));
-            Assert.True(result.ContainsKey("98765432109876543"));
-            Assert.Equal("testuser1", result["12345678901234567"].AccountName);
-            Assert.Equal("testuser2", result["98765432109876543"].AccountName);
-            Assert.Equal("Test User 1", result["12345678901234567"].PersonaName);
-            Assert.Equal("Test User 2", result["98765432109876543"].PersonaName);
-            Assert.Equal("Test User 1", result["12345678901234567"].DisplayName);
+            Assert.True(result.ContainsKey("76561198000000001"));
+            Assert.True(result.ContainsKey("76561198000000002"));
+            Assert.Equal("testuser1", result["76561198000000001"].AccountName);
+            Assert.Equal("testuser2", result["76561198000000002"].AccountName);
+            Assert.Equal("Test User 1", result["76561198000000001"].PersonaName);
+            Assert.Equal("Test User 2", result["76561198000000002"].PersonaName);
+            Assert.Equal("Test User 1", result["76561198000000001"].DisplayName);
         }
         finally
         {
@@ -94,12 +94,12 @@ public class SteamUsersReaderTests
 
             var loginusersContent = @"""users""
 {
-    ""12345678901234567""
+    ""76561198000000001""
     {
         ""AccountName""       ""testuser""
     }
     // incomplete entry
-    ""99999999999999999""
+    ""76561198000000002""
     {
 ";
             File.WriteAllText(Path.Combine(configDir, "loginusers.vdf"), loginusersContent);
@@ -108,7 +108,7 @@ public class SteamUsersReaderTests
 
             // Should at least get the first user
             Assert.Single(result);
-            Assert.True(result.ContainsKey("12345678901234567"));
+            Assert.True(result.ContainsKey("76561198000000001"));
         }
         finally
         {
@@ -128,12 +128,12 @@ public class SteamUsersReaderTests
 
             var loginusersContent = @"""users""
 {
-    ""12345678901234567""
+    ""76561198000000001""
     {
         ""AccountName""       ""validuser""
         ""PersonaName""       ""Valid User""
     }
-    ""98765432109876543""
+    ""76561198000000002""
     {
         ""AccountName""       ""invaliduser""
         ""PersonaName""       ""Invalid User""
@@ -141,12 +141,12 @@ public class SteamUsersReaderTests
 }";
             File.WriteAllText(Path.Combine(configDir, "loginusers.vdf"), loginusersContent);
 
-            var validUserIds = new List<string> { "12345678901234567" };
+            var validUserIds = new List<string> { "76561198000000001" };
             var result = SteamUsersReader.GetValidUsers(tempRoot, validUserIds);
 
             Assert.Single(result);
             Assert.Equal("validuser", result[0].AccountName);
-            Assert.Equal("12345678901234567", result[0].UserId);
+            Assert.Equal("76561198000000001", result[0].UserId);
         }
         finally
         {
@@ -166,7 +166,7 @@ public class SteamUsersReaderTests
 
             var loginusersContent = @"""users""
 {
-    ""12345678901234567""
+    ""76561198000000001""
     {
         ""AccountName""       ""testuser""
     }
@@ -174,12 +174,12 @@ public class SteamUsersReaderTests
             File.WriteAllText(Path.Combine(configDir, "loginusers.vdf"), loginusersContent);
 
             // This user ID is not in loginusers.vdf but is valid IDs
-            var validUserIds = new List<string> { "99999999999999999" };
+            var validUserIds = new List<string> { "76561198000000002" };
             var result = SteamUsersReader.GetValidUsers(tempRoot, validUserIds);
 
             Assert.Single(result);
             Assert.Equal("", result[0].AccountName);
-            Assert.Equal("Steam User 99999999999999999", result[0].DisplayName);
+            Assert.Equal("Steam User 76561198000000002", result[0].DisplayName);
         }
         finally
         {
@@ -199,7 +199,7 @@ public class SteamUsersReaderTests
 
             var loginusersContent = @"""users""
 {
-    ""12345678901234567""
+    ""76561198000000001""
     {
         ""AccountName""       ""testuser""
     }
@@ -253,7 +253,7 @@ public class SteamUserAccountTests
     {
         var account = new SteamUserAccount
         {
-            UserId = "12345678901234567",
+            UserId = "76561198000000001",
             AccountName = "testuser"
         };
 
@@ -265,11 +265,11 @@ public class SteamUserAccountTests
     {
         var account = new SteamUserAccount
         {
-            UserId = "12345678901234567",
+            UserId = "76561198000000001",
             AccountName = ""
         };
 
-        Assert.Equal("Steam User 12345678901234567", account.DisplayName);
+        Assert.Equal("Steam User 76561198000000001", account.DisplayName);
     }
 
     [Fact]
@@ -277,7 +277,7 @@ public class SteamUserAccountTests
     {
         var account = new SteamUserAccount
         {
-            UserId = "12345678901234567",
+            UserId = "76561198000000001",
             AccountName = "loginname",
             PersonaName = "Display Name"
         };
@@ -290,7 +290,7 @@ public class SteamUserAccountTests
     {
         var account = new SteamUserAccount
         {
-            UserId = "12345678901234567",
+            UserId = "76561198000000001",
             AccountName = "loginname",
             PersonaName = "Friendly Name"
         };

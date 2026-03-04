@@ -36,6 +36,36 @@ public class UtilsTests
         Assert.False(result);
         Assert.Equal(string.Empty, steamId64);
     }
+
+    [Fact]
+    public void TryConvertSteamId64ToUserDataId_WithSteamId64_ReturnsAccountId()
+    {
+        var result = Utils.TryConvertSteamId64ToUserDataId("76561197960524373", out var userDataId);
+
+        Assert.True(result);
+        Assert.Equal("258645", userDataId);
+    }
+
+    [Fact]
+    public void TryConvertSteamId64ToUserDataId_WithAccountId_ReturnsSameValue()
+    {
+        var result = Utils.TryConvertSteamId64ToUserDataId("258645", out var userDataId);
+
+        Assert.True(result);
+        Assert.Equal("258645", userDataId);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("  ")]
+    [InlineData("not-a-number")]
+    public void TryConvertSteamId64ToUserDataId_WithInvalidInput_ReturnsFalse(string input)
+    {
+        var result = Utils.TryConvertSteamId64ToUserDataId(input, out var userDataId);
+
+        Assert.False(result);
+        Assert.Equal(string.Empty, userDataId);
+    }
     [Theory]
     [InlineData("\"C:\\Games\\Foo.exe\"", "C:\\Games\\Foo.exe")]
     [InlineData("C:\\Games\\Foo.exe", "C:\\Games\\Foo.exe")]

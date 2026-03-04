@@ -15,7 +15,24 @@ internal static class EmulatorPathUtils
         }
 
         var value = s ?? string.Empty;
-        return value.StartsWith("^") || value.EndsWith("$") || value.Contains("\\.") || value.Contains(".*");
+
+        if (value.StartsWith("^") || value.EndsWith("$"))
+        {
+            return true;
+        }
+
+        if (value.Contains("\\d") || value.Contains("\\w") || value.Contains("\\s") || value.Contains("\\."))
+        {
+            return true;
+        }
+
+        if (value.Contains(".*") || value.Contains(".+") || value.Contains(".?") || value.Contains("[") || value.Contains("]")
+            || value.Contains("(") || value.Contains(")") || value.Contains("{") || value.Contains("}") || value.Contains("|"))
+        {
+            return true;
+        }
+
+        return false;
     }
 
     public static string QuoteArgumentsIfNeeded(string? args)
@@ -31,8 +48,8 @@ internal static class EmulatorPathUtils
             return string.Empty;
         }
 
-        // Already quoted
-        if (trimmed.StartsWith("\"") && trimmed.EndsWith("\""))
+        // Already fully quoted (entire string wrapped in quotes)
+        if (trimmed.StartsWith("\"") && trimmed.EndsWith("\"") && trimmed.Count(c => c == '\"') == 2)
         {
             return trimmed;
         }
@@ -43,8 +60,20 @@ internal static class EmulatorPathUtils
             return trimmed;
         }
 
-        // Looks like flags or already has quoted parts - don't re-quote
-        if (trimmed.StartsWith("-") || trimmed.StartsWith("\""))
+        // Contains quoted segments (e.g., -f "C:\\path with space\\file.rom")
+        // Don't re-quote if there are any quotes already present
+        if (trimmed.Contains("\""))
+        {
+            return trimmed;
+        }
+
+        // Looks like command flags - don't quote
+        if (trimmed.StartsWith("-") || trimmed.StartsWith("/"))
+        {
+            return trimmed;
+        }
+
+        if (trimmed.Contains(" -") || trimmed.Contains(" /"))
         {
             return trimmed;
         }

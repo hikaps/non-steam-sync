@@ -149,7 +149,12 @@ public class ShortcutsLibrary : LibraryPlugin
         foreach (var userDir in Directory.EnumerateDirectories(userdata))
         {
             var userId = Path.GetFileName(userDir);
-            if (Utils.TryConvertUserDataIdToSteamId64(userId, out var steamId64) && steamId64 != "0")
+            if (userId == "0")
+            {
+                continue;
+            }
+
+            if (Utils.TryConvertUserDataIdToSteamId64(userId, out var steamId64))
             {
                 result.Add(steamId64);
             }

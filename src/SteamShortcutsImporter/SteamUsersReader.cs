@@ -234,8 +234,7 @@ internal static class SteamUsersReader
 
     private static bool IsSteamId(string value)
     {
-        // Steam IDs are 17-digit numbers (SteamID64)
-        if (string.IsNullOrEmpty(value) || value.Length != 17)
+        if (string.IsNullOrEmpty(value))
         {
             return false;
         }
@@ -248,6 +247,11 @@ internal static class SteamUsersReader
             }
         }
 
-        return true;
+        if (!ulong.TryParse(value, out var steamId64Value))
+        {
+            return false;
+        }
+
+        return steamId64Value >= Constants.SteamId64Base || steamId64Value == 0;
     }
 }

@@ -101,8 +101,12 @@ internal class WriteBackHandler : IDisposable
 
             var shortcuts = ShortcutsFile.Read(vdfPath!).ToList();
             // Use GroupBy to handle duplicates safely (keep first occurrence)
-            var byStable = shortcuts.GroupBy(s => s.StableId, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
-            var byApp = shortcuts.GroupBy(s => s.AppId.ToString(), StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+            var stableGroups = shortcuts.GroupBy(s => s.StableId, StringComparer.OrdinalIgnoreCase).ToList();
+            var appGroups = shortcuts.GroupBy(s => s.AppId.ToString(), StringComparer.OrdinalIgnoreCase).ToList();
+            LogDuplicateGroups(stableGroups, "StableId");
+            LogDuplicateGroups(appGroups, "AppId");
+            var byStable = stableGroups.ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+            var byApp = appGroups.ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
             bool changed = false;
 
             // Check all games from this library and sync any that changed
@@ -169,6 +173,17 @@ internal class WriteBackHandler : IDisposable
 
         
         EnsureSteamPlayAction(game, sc);
+    }
+
+    private void LogDuplicateGroups(IEnumerable<IGrouping<string, SteamShortcut>> groups, string keyName)
+    {
+        foreach (var group in groups)
+        {
+            if (group.Count() > 1)
+            {
+                _logger.Warn($"Duplicate shortcuts.vdf entries detected for {keyName}='{group.Key}'. Using first occurrence and skipping {group.Count() - 1} duplicate(s).");
+            }
+        }
     }
 
     private void UpdateShortcutArtworkFromGame(Game game, SteamShortcut sc, string vdfPath)
