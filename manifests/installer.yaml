@@ -1,5 +1,14 @@
 AddonId: f15771cd-b6d7-4a3d-9b8e-08786a13d9c7
 Packages:
+  - Version: 0.7.0
+    RequiredApiVersion: 6.0.0
+    ReleaseDate: 2026-03-04
+    PackageUrl: https://github.com/hikaps/non-steam-sync/releases/download/v0.7.0/SteamShortcutsImporter-v0.7.0.pext
+    Changelog:
+      - Add Steam user selection for multi-account support
+      - Add emulator support for game exports
+      - Fix multi-account user selection edge cases
+      - Harden emulator and SteamID handling
   - Version: 0.6.1
     RequiredApiVersion: 6.0.0
     ReleaseDate: 2026-02-19
