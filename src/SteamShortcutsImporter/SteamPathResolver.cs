@@ -24,6 +24,7 @@ internal class SteamPathResolver
     /// <summary>
     /// Resolves the path to the shortcuts.vdf file for the current Steam installation.
     /// Searches through all user directories and returns the first valid shortcuts.vdf found.
+    /// If no shortcuts.vdf exists, returns a path for creation in the first valid user directory.
     /// </summary>
     public string? ResolveShortcutsVdfPath()
     {
@@ -41,13 +42,28 @@ internal class SteamPathResolver
                 return null;
             }
 
+            string? firstValidUserDir = null;
             foreach (var userDir in Directory.EnumerateDirectories(userdata))
             {
+                var dirName = Path.GetFileName(userDir);
+                // Track first valid user directory (numeric folder name)
+                if (firstValidUserDir == null && !string.IsNullOrEmpty(dirName) && dirName.All(char.IsDigit))
+                {
+                    firstValidUserDir = userDir;
+                }
+
                 var cfg = Path.Combine(userDir, Constants.ConfigDirectory, "shortcuts.vdf");
                 if (File.Exists(cfg))
                 {
                     return cfg;
                 }
+            }
+
+            // No shortcuts.vdf found - return path for creation in first valid user directory
+            if (firstValidUserDir != null)
+            {
+                var configDir = Path.Combine(firstValidUserDir, Constants.ConfigDirectory);
+                return Path.Combine(configDir, "shortcuts.vdf");
             }
         }
         catch (Exception ex)
