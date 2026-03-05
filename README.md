@@ -1,5 +1,11 @@
 # Non-Steam Sync for Playnite
 
+[![Version](https://img.shields.io/badge/version-0.7.0-blue.svg)](https://github.com/hikaps/non-steam-sync/releases)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Playnite](https://img.shields.io/badge/Playnite-9+-orange.svg)](https://playnite.link)
+[![CI](https://github.com/hikaps/non-steam-sync/actions/workflows/build.yml/badge.svg)](https://github.com/hikaps/non-steam-sync/actions/workflows/build.yml)
+
+
 ## Why This Exists
 
 I love Playnite as a clean, flexible launcher, but Steam offers the best controller experience: powerful per-game profiles, community layouts, Steam Input, and the overlay. This extension bridges the two so you can start games from Playnite while actually launching them through Steam—getting Playnite's organization and visuals with Steam's controller magic. It's the best of both worlds with minimal fuss.
@@ -15,13 +21,28 @@ I love Playnite as a clean, flexible launcher, but Steam offers the best control
 
 ## Installation
 
-1. Download the latest `.pext` from [Releases](../../releases)
+### From Playnite (Recommended)
+
+1. In Playnite, open **Add-ons** (press `F9` or click the gamepad menu ☰ → **Add-ons**)
+2. Go to **Browse → Libraries** and search for "Non-Steam Sync"
+3. Click **Install** and restart when prompted
+
+### Manual Installation
+
+1. Download the latest `.pext` from [Releases](https://github.com/hikaps/non-steam-sync/releases)
 2. In Playnite: **Add-ons → Install from file…** → select the `.pext`
 3. Restart Playnite when prompted
 
+## Requirements
+
+- Windows 10/11
+- Playnite 9 or later
+- Steam installed
+- .NET Framework 4.6.2+ (included with Windows 10+)
+
 ## Setup
 
-1. Open settings: **Add-ons → Extensions → Steam Shortcuts**
+1. Open settings: **Add-ons → Extension Settings → Non-Steam Sync**
 2. Set your Steam folder:
    - The path is **auto-detected** from the Windows registry on first run
    - Use **Browse** to pick a folder manually
