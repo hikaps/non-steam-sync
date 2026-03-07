@@ -757,25 +757,14 @@ internal class ImportExportService
         string? emulatorInstallDir,
         string name)
     {
-        // Get executable path
+        // Get executable path (no regex resolution - Playnite uses CustomEmulatorProfile.Executable directly)
         var exePath = profile.Executable;
-
-        // Resolve regex patterns to actual file paths
-        if (EmulatorPathUtils.IsRegexPattern(exePath))
-        {
-            exePath = EmulatorPathUtils.ResolveExecutablePattern(exePath, emulatorInstallDir, logger, g.Name);
-            if (string.IsNullOrEmpty(exePath))
-            {
-                return (string.Empty, null, name, null);
-            }
-        }
 
         if (string.IsNullOrWhiteSpace(exePath))
         {
             logger.Warn($"Cannot export '{g.Name}': Emulator profile has no executable set");
             return (string.Empty, null, name, null);
         }
-
         // Build arguments (considering OverrideDefaultArgs and AdditionalArguments)
         string args;
         if (emulatorAction.OverrideDefaultArgs)
@@ -1121,10 +1110,17 @@ internal class ImportExportService
     {
         try
         {
-            var fileArgs = action.Type == GameActionType.File
-                ? EmulatorPathUtils.QuoteArgumentsIfNeeded(_pathResolver.ExpandPathVariables(g, action.Arguments))
-                : null;
-            _library.EnsureFileActionForExternalGame(g, exePath, workDir, fileArgs);
+            // Don't add "Play (Direct)" File action if the game already has an Emulator action.
+            // Emulator games are launched via the emulator, not directly.
+            var hasEmulatorAction = g.GameActions?.Any(a => a.Type == GameActionType.Emulator) == true;
+            if (!hasEmulatorAction)
+            {
+                var fileArgs = action.Type == GameActionType.File
+                    ? EmulatorPathUtils.QuoteArgumentsIfNeeded(_pathResolver.ExpandPathVariables(g, action.Arguments))
+                    : null;
+                _library.EnsureFileActionForExternalGame(g, exePath, workDir, fileArgs);
+            }
+            
             if (_library.Settings.LaunchViaSteam && appId != 0) { _library.EnsureSteamPlayActionForExternalGame(g, appId); }
         }
         catch (Exception ex)

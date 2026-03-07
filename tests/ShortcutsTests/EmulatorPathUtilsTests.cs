@@ -127,19 +127,19 @@ public class EmulatorPathUtilsTests
     }
 
     [Fact]
-    public void IsRegexPattern_ContainsDigitClass_ReturnsTrue()
+    public void IsRegexPattern_ContainsDigitClass_ReturnsFalse()
     {
+        // \d in paths is common (e.g., C:\Games\DuckStation\...)
         var result = EmulatorPathUtils.IsRegexPattern("emu\\d+.exe");
-        Assert.True(result);
+        Assert.False(result);
     }
-
     [Fact]
-    public void IsRegexPattern_ContainsWordClass_ReturnsTrue()
+    public void IsRegexPattern_ContainsWordClass_ReturnsFalse()
     {
+        // \w in paths is common (e.g., C:\Games\MyWork\...)
         var result = EmulatorPathUtils.IsRegexPattern("\\w+.exe");
-        Assert.True(result);
+        Assert.False(result);
     }
-
     [Fact]
     public void IsRegexPattern_PlainFilename_ReturnsFalse()
     {
@@ -164,9 +164,34 @@ public class EmulatorPathUtilsTests
     }
 
     [Fact]
-    public void IsRegexPattern_WildcardDotStar_ReturnsTrue()
+    public void IsRegexPattern_WildcardDotStar_ReturnsFalse()
     {
+        // .* can appear in version strings (e.g., game.v1.0.exe)
         var result = EmulatorPathUtils.IsRegexPattern(".*.exe");
+        Assert.False(result);
+    }
+
+    [Fact]
+    public void IsRegexPattern_WindowsPathWithBackslashD_ReturnsFalse()
+    {
+        // Real Windows path containing \duckstation\ should NOT be treated as regex
+        var result = EmulatorPathUtils.IsRegexPattern("C:\\Games\\DuckStation\\duckstation.exe");
+        Assert.False(result);
+    }
+
+    [Fact]
+    public void IsRegexPattern_ContainsCharacterClass_ReturnsTrue()
+    {
+        // [...] is unambiguous regex
+        var result = EmulatorPathUtils.IsRegexPattern("emu[0-9].exe");
+        Assert.True(result);
+    }
+
+    [Fact]
+    public void IsRegexPattern_ContainsGroup_ReturnsTrue()
+    {
+        // (...) is unambiguous regex
+        var result = EmulatorPathUtils.IsRegexPattern("(retro|duck).exe");
         Assert.True(result);
     }
 

@@ -16,17 +16,19 @@ internal static class EmulatorPathUtils
 
         var value = s ?? string.Empty;
 
+        // Only detect unambiguous regex patterns
+        // Explicit anchors indicate regex intent
         if (value.StartsWith("^") || value.EndsWith("$"))
         {
             return true;
         }
 
-        if (value.Contains("\\d") || value.Contains("\\w") || value.Contains("\\s") || value.Contains("\\."))
-        {
-            return true;
-        }
-
-        if (value.Contains(".*") || value.Contains(".+") || value.Contains(".?") || value.Contains("[") || value.Contains("]")
+        // Character classes, groups, and alternation that don't appear in typical paths
+        // Note: We don't check for \d, \w, \s, \. or .* patterns since these appear in Windows paths
+        // e.g., C:\Games\DuckStation\duckstation.exe contains \d
+        // e.g., C:\Games\My.Program\app.exe contains \. 
+        // e.g., C:\Games\Game.v1.0\app.exe could match .+ pattern
+        if (value.Contains("[") || value.Contains("]")
             || value.Contains("(") || value.Contains(")") || value.Contains("{") || value.Contains("}") || value.Contains("|"))
         {
             return true;
