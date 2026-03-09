@@ -418,6 +418,15 @@ public class ShortcutsLibrary : LibraryPlugin
 
     private GameAction BuildFilePlayAction(SteamShortcut sc, bool isDefault)
     {
+        // Derive tracking path from working directory or executable path
+        var trackingPath = sc.StartDir;
+        if (string.IsNullOrWhiteSpace(trackingPath) && !string.IsNullOrWhiteSpace(sc.Exe))
+        {
+            try { trackingPath = System.IO.Path.GetDirectoryName(sc.Exe?.Trim('"'));
+            }
+            catch { trackingPath = null; }
+        }
+
         return new GameAction
         {
             Name = Constants.PlayDirectActionName,
@@ -425,19 +434,31 @@ public class ShortcutsLibrary : LibraryPlugin
             Path = sc.Exe?.Trim('"'),
             Arguments = sc.LaunchOptions,
             WorkingDir = sc.StartDir,
-            IsPlayAction = isDefault
+            IsPlayAction = isDefault,
+            TrackingMode = TrackingMode.Directory,
+            TrackingPath = trackingPath
         };
     }
 
-    private GameAction BuildSteamUrlAction(uint appId, bool isDefault)
+    private GameAction BuildSteamUrlAction(SteamShortcut sc, bool isDefault)
     {
-        var gid = Utils.ToShortcutGameId(appId);
+        // Derive tracking path from working directory or executable path
+        var trackingPath = sc.StartDir;
+        if (string.IsNullOrWhiteSpace(trackingPath) && !string.IsNullOrWhiteSpace(sc.Exe))
+        {
+            try { trackingPath = System.IO.Path.GetDirectoryName(sc.Exe?.Trim('"')); }
+            catch { trackingPath = null; }
+        }
+
+        var gid = Utils.ToShortcutGameId(sc.AppId);
         return new GameAction
         {
             Name = Constants.PlaySteamActionName,
             Type = GameActionType.URL,
             Path = $"steam://rungameid/{gid}",
-            IsPlayAction = isDefault
+            IsPlayAction = isDefault,
+            TrackingMode = TrackingMode.Directory,
+            TrackingPath = trackingPath
         };
     }
 
@@ -447,8 +468,7 @@ public class ShortcutsLibrary : LibraryPlugin
         if (Settings.LaunchViaSteam && sc.AppId != 0)
         {
             // Steam URL default, keep direct exe as secondary
-            actions.Add(BuildSteamUrlAction(sc.AppId, isDefault: true));
-            actions.Add(BuildFilePlayAction(sc, isDefault: false));
+            actions.Add(BuildSteamUrlAction(sc, isDefault: true));
         }
         else
         {
@@ -485,7 +505,7 @@ public class ShortcutsLibrary : LibraryPlugin
         }
     }
 
-    internal void EnsureSteamPlayActionForExternalGame(Game game, uint appId)
+    internal void EnsureSteamPlayActionForExternalGame(Game game, uint appId, string? trackingPath = null)
     {
         if (appId == 0)
         {
@@ -494,7 +514,9 @@ public class ShortcutsLibrary : LibraryPlugin
 
         var expectedUrl = $"{Constants.SteamRungameIdUrl}{Utils.ToShortcutGameId(appId)}";
         var existing = game.GameActions as IList<GameAction>;
-        var changed = GameActionUtilities.EnsureSteamLaunchAction(existing, expectedUrl, out var updated, out _);
+        // Use provided tracking path, or fall back to game's install directory
+        var effectiveTrackingPath = trackingPath ?? game.InstallDirectory;
+        var changed = GameActionUtilities.EnsureSteamLaunchAction(existing, expectedUrl, effectiveTrackingPath, out var updated, out _);
         if (!changed)
         {
             return;
