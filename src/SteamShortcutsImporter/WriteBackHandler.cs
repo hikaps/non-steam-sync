@@ -231,8 +231,8 @@ internal class WriteBackHandler : IDisposable
                 var trackingPath = sc.StartDir;
                 if (string.IsNullOrWhiteSpace(trackingPath) && !string.IsNullOrWhiteSpace(directExe))
                 {
-                    try { trackingPath = System.IO.Path.GetDirectoryName(directExe); }
-                    catch { trackingPath = null; }
+try { trackingPath = System.IO.Path.GetDirectoryName(directExe); }
+				catch (Exception ex) { _logger.Warn(ex, $"Failed to derive tracking path from exe for '{sc.AppName}'"); trackingPath = null; }
                 }
 
                 newActions.Add(new GameAction

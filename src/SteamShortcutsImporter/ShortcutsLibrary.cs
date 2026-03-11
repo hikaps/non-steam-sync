@@ -422,9 +422,8 @@ public class ShortcutsLibrary : LibraryPlugin
         var trackingPath = sc.StartDir;
         if (string.IsNullOrWhiteSpace(trackingPath) && !string.IsNullOrWhiteSpace(sc.Exe))
         {
-            try { trackingPath = System.IO.Path.GetDirectoryName(sc.Exe?.Trim('"'));
-            }
-            catch { trackingPath = null; }
+            try { trackingPath = System.IO.Path.GetDirectoryName(sc.Exe?.Trim('"')); }
+			catch (Exception ex) { Logger.Warn(ex, $"Failed to derive tracking path from exe for '{sc.AppName}'"); trackingPath = null; }
         }
 
         return new GameAction
@@ -446,8 +445,8 @@ public class ShortcutsLibrary : LibraryPlugin
         var trackingPath = sc.StartDir;
         if (string.IsNullOrWhiteSpace(trackingPath) && !string.IsNullOrWhiteSpace(sc.Exe))
         {
-            try { trackingPath = System.IO.Path.GetDirectoryName(sc.Exe?.Trim('"')); }
-            catch { trackingPath = null; }
+try { trackingPath = System.IO.Path.GetDirectoryName(sc.Exe?.Trim('"')); }
+		catch (Exception ex) { Logger.Warn(ex, $"Failed to derive tracking path from exe for '{sc.AppName}'"); trackingPath = null; }
         }
 
         var gid = Utils.ToShortcutGameId(sc.AppId);
