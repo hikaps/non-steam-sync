@@ -806,7 +806,9 @@ internal class ImportExportService
             Path = expandedExe,
             Arguments = expandedArgs,
             WorkingDir = workDir,
-            IsPlayAction = emulatorAction.IsPlayAction
+            IsPlayAction = emulatorAction.IsPlayAction,
+            TrackingMode = TrackingMode.Directory,
+            TrackingPath = emulatorInstallDir
         };
 
         return (expandedExe, workDir, name, syntheticAction);
@@ -930,7 +932,9 @@ internal class ImportExportService
             Path = expandedExe,
             Arguments = expandedArgs,
             WorkingDir = workDir,
-            IsPlayAction = emulatorAction.IsPlayAction
+            IsPlayAction = emulatorAction.IsPlayAction,
+            TrackingMode = TrackingMode.Directory,
+            TrackingPath = emulatorInstallDir
         };
 
         return (expandedExe, workDir, name, syntheticAction);
@@ -999,7 +1003,9 @@ internal class ImportExportService
             Type = GameActionType.File,
             Path = exePath,
             WorkingDir = Path.GetDirectoryName(exePath),
-            IsPlayAction = game.GameActions == null || !game.GameActions.Any(a => a.IsPlayAction)
+            IsPlayAction = game.GameActions == null || !game.GameActions.Any(a => a.IsPlayAction),
+            TrackingMode = TrackingMode.Directory,
+            TrackingPath = Path.GetDirectoryName(exePath)
         };
 
         try
@@ -1121,7 +1127,7 @@ internal class ImportExportService
                 _library.EnsureFileActionForExternalGame(g, exePath, workDir, fileArgs);
             }
             
-            if (_library.Settings.LaunchViaSteam && appId != 0) { _library.EnsureSteamPlayActionForExternalGame(g, appId); }
+            if (_library.Settings.LaunchViaSteam && appId != 0) { _library.EnsureSteamPlayActionForExternalGame(g, appId, workDir); }
         }
         catch (Exception ex)
         {

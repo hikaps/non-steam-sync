@@ -7,7 +7,7 @@ namespace SteamShortcutsImporter;
 
 internal static class GameActionUtilities
 {
-    public static bool EnsureSteamLaunchAction(IList<GameAction>? existingActions, string expectedUrl, out List<GameAction> updatedActions, out GameAction steamAction)
+    public static bool EnsureSteamLaunchAction(IList<GameAction>? existingActions, string expectedUrl, string? trackingPath, out List<GameAction> updatedActions, out GameAction steamAction)
     {
         var actions = existingActions != null ? new List<GameAction>(existingActions) : new List<GameAction>();
         bool changed = false;
@@ -22,7 +22,9 @@ internal static class GameActionUtilities
             {
                 Name = Constants.PlaySteamActionName,
                 Type = GameActionType.URL,
-                Path = expectedUrl
+                Path = expectedUrl,
+                TrackingMode = TrackingMode.Directory,
+                TrackingPath = trackingPath
             };
             actions.Add(steam);
             changed = true;
@@ -44,6 +46,18 @@ internal static class GameActionUtilities
             if (!string.Equals(steam.Name, Constants.PlaySteamActionName, StringComparison.Ordinal))
             {
                 steam.Name = Constants.PlaySteamActionName;
+                changed = true;
+            }
+
+            if (steam.TrackingMode != TrackingMode.Directory)
+            {
+                steam.TrackingMode = TrackingMode.Directory;
+                changed = true;
+            }
+
+            if (!string.Equals(steam.TrackingPath, trackingPath, StringComparison.OrdinalIgnoreCase))
+            {
+                steam.TrackingPath = trackingPath;
                 changed = true;
             }
         }

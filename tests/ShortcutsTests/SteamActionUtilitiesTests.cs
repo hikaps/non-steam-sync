@@ -19,13 +19,16 @@ public class SteamActionUtilitiesTests
         };
 
         var expectedUrl = $"{Constants.SteamRungameIdUrl}123456";
-        var changed = GameActionUtilities.EnsureSteamLaunchAction(new List<GameAction> { fileAction }, expectedUrl, out var updated, out var steamAction);
+        var trackingPath = @"C:\Games";
+        var changed = GameActionUtilities.EnsureSteamLaunchAction(new List<GameAction> { fileAction }, expectedUrl, trackingPath, out var updated, out var steamAction);
 
         Assert.True(changed);
         Assert.Equal(Constants.PlaySteamActionName, steamAction.Name);
         Assert.Equal(GameActionType.URL, steamAction.Type);
         Assert.Equal(expectedUrl, steamAction.Path);
         Assert.True(steamAction.IsPlayAction);
+        Assert.Equal(TrackingMode.Directory, steamAction.TrackingMode);
+        Assert.Equal(trackingPath, steamAction.TrackingPath);
         Assert.Equal(2, updated.Count);
         Assert.Same(fileAction, updated[1]);
         Assert.False(fileAction.IsPlayAction);
@@ -43,9 +46,10 @@ public class SteamActionUtilitiesTests
         };
 
         var expectedUrl = existingSteam.Path;
+        var trackingPath = @"C:\Games";
         var otherAction = new GameAction { Name = "Custom", Type = GameActionType.File, Path = "custom.exe", IsPlayAction = true };
 
-        var changed = GameActionUtilities.EnsureSteamLaunchAction(new List<GameAction> { otherAction, existingSteam }, expectedUrl, out var updated, out var steamAction);
+        var changed = GameActionUtilities.EnsureSteamLaunchAction(new List<GameAction> { otherAction, existingSteam }, expectedUrl, trackingPath, out var updated, out var steamAction);
 
         Assert.True(changed);
         Assert.Same(existingSteam, steamAction);
@@ -61,11 +65,12 @@ public class SteamActionUtilitiesTests
     public void RemovesDuplicateSteamActionsWithSamePath()
     {
         var expectedUrl = $"{Constants.SteamRungameIdUrl}246810";
+        var trackingPath = @"C:\Games";
         var steamA = new GameAction { Name = "Play (Steam)", Type = GameActionType.URL, Path = expectedUrl, IsPlayAction = true };
         var steamB = new GameAction { Name = "Play (Steam)", Type = GameActionType.URL, Path = expectedUrl, IsPlayAction = false };
         var other = new GameAction { Name = "Something Else", Type = GameActionType.File, Path = "run.exe" };
 
-        var changed = GameActionUtilities.EnsureSteamLaunchAction(new List<GameAction> { steamA, steamB, other }, expectedUrl, out var updated, out var steamAction);
+        var changed = GameActionUtilities.EnsureSteamLaunchAction(new List<GameAction> { steamA, steamB, other }, expectedUrl, trackingPath, out var updated, out var steamAction);
 
         Assert.True(changed);
         Assert.Single(updated.Where(a => a.Type == GameActionType.URL && a.Path == expectedUrl));
@@ -77,6 +82,7 @@ public class SteamActionUtilitiesTests
     public void KeepsOtherSteamActionsWithDifferentTargets()
     {
         var expectedUrl = $"{Constants.SteamRungameIdUrl}100200";
+        var trackingPath = @"C:\Games";
         var otherSteam = new GameAction
         {
             Name = "Official Steam",
@@ -85,7 +91,7 @@ public class SteamActionUtilitiesTests
             IsPlayAction = false
         };
 
-        var changed = GameActionUtilities.EnsureSteamLaunchAction(new List<GameAction> { otherSteam }, expectedUrl, out var updated, out var steamAction);
+        var changed = GameActionUtilities.EnsureSteamLaunchAction(new List<GameAction> { otherSteam }, expectedUrl, trackingPath, out var updated, out var steamAction);
 
         Assert.True(changed);
         Assert.Equal(2, updated.Count);

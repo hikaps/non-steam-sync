@@ -226,12 +226,23 @@ internal class WriteBackHandler : IDisposable
                 }
 
                 var directArgs = EmulatorPathUtils.QuoteArgumentsIfNeeded(sc.LaunchOptions);
+
+                // Derive tracking path from working directory or executable path
+                var trackingPath = sc.StartDir;
+                if (string.IsNullOrWhiteSpace(trackingPath) && !string.IsNullOrWhiteSpace(directExe))
+                {
+try { trackingPath = System.IO.Path.GetDirectoryName(directExe); }
+				catch (Exception ex) { _logger.Warn(ex, $"Failed to derive tracking path from exe for '{sc.AppName}'"); trackingPath = null; }
+                }
+
                 newActions.Add(new GameAction
                 {
                     Name = Constants.PlaySteamActionName,
                     Type = GameActionType.URL,
                     Path = expectedUrl,
-                    IsPlayAction = true
+                    IsPlayAction = true,
+                    TrackingMode = TrackingMode.Directory,
+                    TrackingPath = trackingPath
                 });
                 newActions.Add(new GameAction
                 {
@@ -240,7 +251,9 @@ internal class WriteBackHandler : IDisposable
                     Path = directExe,
                     Arguments = directArgs,
                     WorkingDir = sc.StartDir,
-                    IsPlayAction = false
+                    IsPlayAction = false,
+                    TrackingMode = TrackingMode.Directory,
+                    TrackingPath = trackingPath
                 });
                 
                 game.GameActions = new System.Collections.ObjectModel.ObservableCollection<GameAction>(newActions);
