@@ -227,13 +227,7 @@ internal class WriteBackHandler : IDisposable
 
                 var directArgs = EmulatorPathUtils.QuoteArgumentsIfNeeded(sc.LaunchOptions);
 
-                // Derive tracking path from working directory or executable path
-                var trackingPath = sc.StartDir;
-                if (string.IsNullOrWhiteSpace(trackingPath) && !string.IsNullOrWhiteSpace(directExe))
-                {
-try { trackingPath = System.IO.Path.GetDirectoryName(directExe); }
-				catch (Exception ex) { _logger.Warn(ex, $"Failed to derive tracking path from exe for '{sc.AppName}'"); trackingPath = null; }
-                }
+                var trackingPath = GameActionUtilities.DeriveTrackingPath(sc.StartDir, directExe, _logger, sc.AppName);
 
                 newActions.Add(new GameAction
                 {

@@ -418,13 +418,7 @@ public class ShortcutsLibrary : LibraryPlugin
 
     private GameAction BuildFilePlayAction(SteamShortcut sc, bool isDefault)
     {
-        // Derive tracking path from working directory or executable path
-        var trackingPath = sc.StartDir;
-        if (string.IsNullOrWhiteSpace(trackingPath) && !string.IsNullOrWhiteSpace(sc.Exe))
-        {
-            try { trackingPath = System.IO.Path.GetDirectoryName(sc.Exe?.Trim('"')); }
-			catch (Exception ex) { Logger.Warn(ex, $"Failed to derive tracking path from exe for '{sc.AppName}'"); trackingPath = null; }
-        }
+        var trackingPath = GameActionUtilities.DeriveTrackingPath(sc.StartDir, sc.Exe, Logger, sc.AppName);
 
         return new GameAction
         {
@@ -441,13 +435,7 @@ public class ShortcutsLibrary : LibraryPlugin
 
     private GameAction BuildSteamUrlAction(SteamShortcut sc, bool isDefault)
     {
-        // Derive tracking path from working directory or executable path
-        var trackingPath = sc.StartDir;
-        if (string.IsNullOrWhiteSpace(trackingPath) && !string.IsNullOrWhiteSpace(sc.Exe))
-        {
-try { trackingPath = System.IO.Path.GetDirectoryName(sc.Exe?.Trim('"')); }
-		catch (Exception ex) { Logger.Warn(ex, $"Failed to derive tracking path from exe for '{sc.AppName}'"); trackingPath = null; }
-        }
+        var trackingPath = GameActionUtilities.DeriveTrackingPath(sc.StartDir, sc.Exe, Logger, sc.AppName);
 
         var gid = Utils.ToShortcutGameId(sc.AppId);
         return new GameAction
@@ -468,6 +456,7 @@ try { trackingPath = System.IO.Path.GetDirectoryName(sc.Exe?.Trim('"')); }
         {
             // Steam URL default, keep direct exe as secondary
             actions.Add(BuildSteamUrlAction(sc, isDefault: true));
+            actions.Add(BuildFilePlayAction(sc, isDefault: false));
         }
         else
         {
