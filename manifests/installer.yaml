@@ -1,5 +1,13 @@
 AddonId: f15771cd-b6d7-4a3d-9b8e-08786a13d9c7
 Packages:
+  - Version: 0.7.1
+    RequiredApiVersion: 6.0.0
+    ReleaseDate: 2026-03-12
+    PackageUrl: https://github.com/hikaps/non-steam-sync/releases/download/v0.7.1/SteamShortcutsImporter-v0.7.1.pext
+    Changelog:
+      - Allow export when shortcuts.vdf doesn't exist yet (fixes misleading Steam path error)
+      - Add directory-level playtime tracking for emulator games
+      - Fix emulator executable detection for Windows paths containing regex-like patterns
   - Version: 0.7.0
     RequiredApiVersion: 6.0.0
     ReleaseDate: 2026-03-04
