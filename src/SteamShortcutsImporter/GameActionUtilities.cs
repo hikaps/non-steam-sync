@@ -1,3 +1,5 @@
+using Playnite.SDK;
+
 using Playnite.SDK.Models;
 using System;
 using System.Collections.Generic;
@@ -100,5 +102,26 @@ internal static class GameActionUtilities
         steamAction = steam;
         updatedActions = actions;
         return changed;
+    }
+
+    /// <summary>
+    /// Derives a tracking path from start directory or executable path.
+    /// </summary>
+    public static string? DeriveTrackingPath(string? startDir, string? exePath, ILogger? logger = null, string? contextName = null)
+    {
+        var trackingPath = startDir;
+        if (string.IsNullOrWhiteSpace(trackingPath) && !string.IsNullOrWhiteSpace(exePath))
+        {
+            try
+            {
+                trackingPath = System.IO.Path.GetDirectoryName(exePath!.Trim('"'));
+            }
+            catch (Exception ex)
+            {
+                logger?.Warn(ex, $"Failed to derive tracking path from exe for '{contextName}'");
+                trackingPath = null;
+            }
+        }
+        return trackingPath;
     }
 }

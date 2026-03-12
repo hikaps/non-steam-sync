@@ -210,55 +210,16 @@ internal class WriteBackHandler : IDisposable
             }
 
             var expectedUrl = $"{Constants.SteamRungameIdUrl}{Utils.ToShortcutGameId(sc.AppId)}";
-            var current = game.GameActions?.FirstOrDefault(a => a.IsPlayAction);
-            var needsUpdate = current == null || current.Type != GameActionType.URL || !string.Equals(current.Path, expectedUrl, StringComparison.OrdinalIgnoreCase);
-
-            if (needsUpdate)
+            var trackingPath = GameActionUtilities.DeriveTrackingPath(sc.StartDir, sc.Exe?.Trim('"'), _logger, sc.AppName);
+            var changed = GameActionUtilities.EnsureSteamLaunchAction(game.GameActions as IList<GameAction>, expectedUrl, trackingPath, out var updated, out _);
+            if (!changed)
             {
-                game ??= new Game();
-                game.IsInstalled = true;
-                var newActions = new List<GameAction>();
-                
-                var directExe = sc.Exe?.Trim('"');
-                if (EmulatorPathUtils.IsRegexPattern(directExe))
-                {
-                    directExe = EmulatorPathUtils.ResolveExecutablePattern(directExe!, sc.StartDir ?? game.InstallDirectory, _logger, game.Name);
-                }
-
-                var directArgs = EmulatorPathUtils.QuoteArgumentsIfNeeded(sc.LaunchOptions);
-
-                // Derive tracking path from working directory or executable path
-                var trackingPath = sc.StartDir;
-                if (string.IsNullOrWhiteSpace(trackingPath) && !string.IsNullOrWhiteSpace(directExe))
-                {
-try { trackingPath = System.IO.Path.GetDirectoryName(directExe); }
-				catch (Exception ex) { _logger.Warn(ex, $"Failed to derive tracking path from exe for '{sc.AppName}'"); trackingPath = null; }
-                }
-
-                newActions.Add(new GameAction
-                {
-                    Name = Constants.PlaySteamActionName,
-                    Type = GameActionType.URL,
-                    Path = expectedUrl,
-                    IsPlayAction = true,
-                    TrackingMode = TrackingMode.Directory,
-                    TrackingPath = trackingPath
-                });
-                newActions.Add(new GameAction
-                {
-                    Name = Constants.PlayDirectActionName,
-                    Type = GameActionType.File,
-                    Path = directExe,
-                    Arguments = directArgs,
-                    WorkingDir = sc.StartDir,
-                    IsPlayAction = false,
-                    TrackingMode = TrackingMode.Directory,
-                    TrackingPath = trackingPath
-                });
-                
-                game.GameActions = new System.Collections.ObjectModel.ObservableCollection<GameAction>(newActions);
-                _playniteApi?.Database?.Games?.Update(game);
+                return;
             }
+
+            game.IsInstalled = true;
+            game.GameActions = new System.Collections.ObjectModel.ObservableCollection<GameAction>(updated);
+            _playniteApi?.Database?.Games?.Update(game);
         }
         catch (Exception ex)
         {

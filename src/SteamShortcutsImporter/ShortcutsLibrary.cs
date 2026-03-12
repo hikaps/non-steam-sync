@@ -1,12 +1,6 @@
 using Playnite.SDK;
 using Playnite.SDK.Models;
 using Playnite.SDK.Plugins;
-using System;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.IO;
-using System.Linq;
-using System.Threading;
 
 namespace SteamShortcutsImporter;
 
@@ -418,13 +412,7 @@ public class ShortcutsLibrary : LibraryPlugin
 
     private GameAction BuildFilePlayAction(SteamShortcut sc, bool isDefault)
     {
-        // Derive tracking path from working directory or executable path
-        var trackingPath = sc.StartDir;
-        if (string.IsNullOrWhiteSpace(trackingPath) && !string.IsNullOrWhiteSpace(sc.Exe))
-        {
-            try { trackingPath = System.IO.Path.GetDirectoryName(sc.Exe?.Trim('"')); }
-			catch (Exception ex) { Logger.Warn(ex, $"Failed to derive tracking path from exe for '{sc.AppName}'"); trackingPath = null; }
-        }
+        var trackingPath = GameActionUtilities.DeriveTrackingPath(sc.StartDir, sc.Exe, Logger, sc.AppName);
 
         return new GameAction
         {
@@ -441,13 +429,7 @@ public class ShortcutsLibrary : LibraryPlugin
 
     private GameAction BuildSteamUrlAction(SteamShortcut sc, bool isDefault)
     {
-        // Derive tracking path from working directory or executable path
-        var trackingPath = sc.StartDir;
-        if (string.IsNullOrWhiteSpace(trackingPath) && !string.IsNullOrWhiteSpace(sc.Exe))
-        {
-try { trackingPath = System.IO.Path.GetDirectoryName(sc.Exe?.Trim('"')); }
-		catch (Exception ex) { Logger.Warn(ex, $"Failed to derive tracking path from exe for '{sc.AppName}'"); trackingPath = null; }
-        }
+        var trackingPath = GameActionUtilities.DeriveTrackingPath(sc.StartDir, sc.Exe, Logger, sc.AppName);
 
         var gid = Utils.ToShortcutGameId(sc.AppId);
         return new GameAction
@@ -468,6 +450,7 @@ try { trackingPath = System.IO.Path.GetDirectoryName(sc.Exe?.Trim('"')); }
         {
             // Steam URL default, keep direct exe as secondary
             actions.Add(BuildSteamUrlAction(sc, isDefault: true));
+            actions.Add(BuildFilePlayAction(sc, isDefault: false));
         }
         else
         {
@@ -487,16 +470,16 @@ try { trackingPath = System.IO.Path.GetDirectoryName(sc.Exe?.Trim('"')); }
             }
 
             var expectedUrl = $"{Constants.SteamRungameIdUrl}{Utils.ToShortcutGameId(sc.AppId)}";
-            var current = game.GameActions?.FirstOrDefault(a => a.IsPlayAction);
-            var needsUpdate = current == null || current.Type != GameActionType.URL || !string.Equals(current.Path, expectedUrl, StringComparison.OrdinalIgnoreCase);
-
-            if (needsUpdate)
+            var trackingPath = GameActionUtilities.DeriveTrackingPath(sc.StartDir, sc.Exe, Logger, sc.AppName);
+            var changed = GameActionUtilities.EnsureSteamLaunchAction(game.GameActions as IList<GameAction>, expectedUrl, trackingPath, out var updated, out _);
+            if (!changed)
             {
-                game.IsInstalled = true;
-                var newActions = BuildActionsForShortcut(sc);
-                game.GameActions = new System.Collections.ObjectModel.ObservableCollection<GameAction>(newActions);
-                PlayniteApi.Database.Games.Update(game);
+                return;
             }
+
+            game.IsInstalled = true;
+            game.GameActions = new System.Collections.ObjectModel.ObservableCollection<GameAction>(updated);
+            PlayniteApi.Database.Games.Update(game);
         }
         catch (Exception ex)
         {

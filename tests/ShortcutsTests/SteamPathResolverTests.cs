@@ -95,19 +95,20 @@ public class SteamPathResolverTests
     }
 
     [Fact]
-    public void ResolveShortcutsVdfPath_NoConfigDir_ReturnsNull()
+    public void ResolveShortcutsVdfPath_NoConfigDir_ReturnsPathForCreation()
     {
         var tempRoot = Path.Combine(Path.GetTempPath(), "steam_test_" + Guid.NewGuid().ToString("N"));
         try
         {
             var userDataDir = Path.Combine(tempRoot, "userdata", "12345");
             Directory.CreateDirectory(userDataDir);
-            // No config directory
+            // No config directory - should still return a path for creation
 
             var resolver = new SteamPathResolver(tempRoot);
             var result = resolver.ResolveShortcutsVdfPath();
 
-            Assert.Null(result);
+            Assert.NotNull(result);
+            Assert.EndsWith(Path.Combine("12345", "config", "shortcuts.vdf"), result);
         }
         finally
         {
