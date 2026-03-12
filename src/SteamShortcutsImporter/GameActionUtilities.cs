@@ -114,7 +114,7 @@ internal static class GameActionUtilities
         {
             try
             {
-                trackingPath = System.IO.Path.GetDirectoryName(exePath.Trim('"'));
+                trackingPath = System.IO.Path.GetDirectoryName(exePath!.Trim('"'));
             }
             catch (Exception ex)
             {
