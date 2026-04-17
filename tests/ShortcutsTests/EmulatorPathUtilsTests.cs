@@ -196,4 +196,117 @@ public class EmulatorPathUtilsTests
     }
 
     #endregion
+
+    #region NormalizePathSeparators Tests
+
+    [Fact]
+    public void NormalizePathSeparators_WithNull_ReturnsEmpty()
+    {
+        var result = EmulatorPathUtils.NormalizePathSeparators(null);
+        Assert.Equal(string.Empty, result);
+    }
+
+    [Fact]
+    public void NormalizePathSeparators_WithEmpty_ReturnsEmpty()
+    {
+        var result = EmulatorPathUtils.NormalizePathSeparators("");
+        Assert.Equal(string.Empty, result);
+    }
+
+    [Fact]
+    public void NormalizePathSeparators_NoDoubleBackslash_ReturnsAsIs()
+    {
+        var result = EmulatorPathUtils.NormalizePathSeparators(@"C:\Games\ROMs\game.iso");
+        Assert.Equal(@"C:\Games\ROMs\game.iso", result);
+    }
+
+    [Fact]
+    public void NormalizePathSeparators_DoubleBackslash_CollapsesToSingle()
+    {
+        var result = EmulatorPathUtils.NormalizePathSeparators(@"C:\Games\\ROMs\game.iso");
+        Assert.Equal(@"C:\Games\ROMs\game.iso", result);
+    }
+
+    [Fact]
+    public void NormalizePathSeparators_PCSX2Scenario_TrailingBackslash()
+    {
+        // Simulates: InstallDir = "X:\Folder1\Folder2\" + filename = "\Resident Evil.iso"
+        var result = EmulatorPathUtils.NormalizePathSeparators(
+            @"-batch -slowboot -- X:\Folder1\Folder2\\Resident Evil - Outbreak (USA) (v2.00).iso");
+        Assert.Equal(@"-batch -slowboot -- X:\Folder1\Folder2\Resident Evil - Outbreak (USA) (v2.00).iso", result);
+    }
+
+    [Fact]
+    public void NormalizePathSeparators_TripleBackslash_CollapsesToSingle()
+    {
+        var result = EmulatorPathUtils.NormalizePathSeparators(@"C:\Games\\\ROMs\game.iso");
+        Assert.Equal(@"C:\Games\ROMs\game.iso", result);
+    }
+
+    [Fact]
+    public void NormalizePathSeparators_MultipleDoubleBackslashes_AllCollapsed()
+    {
+        var result = EmulatorPathUtils.NormalizePathSeparators(@"C:\Games\\ROMs\\PS2\game.iso");
+        Assert.Equal(@"C:\Games\ROMs\PS2\game.iso", result);
+    }
+
+    [Fact]
+    public void NormalizePathSeparators_UNCPathPrefix_Preserved()
+    {
+        // UNC path: \\server\share should keep its double backslash prefix
+        var result = EmulatorPathUtils.NormalizePathSeparators(@"\\server\share\file.iso");
+        Assert.Equal(@"\\server\share\file.iso", result);
+    }
+
+    [Fact]
+    public void NormalizePathSeparators_UNCPathInArguments_Preserved()
+    {
+        // UNC path after flags: -- \\server\share should keep its prefix
+        var result = EmulatorPathUtils.NormalizePathSeparators(@"-- \\server\share\file.iso");
+        Assert.Equal(@"-- \\server\share\file.iso", result);
+    }
+
+    [Fact]
+    public void NormalizePathSeparators_UNCPathInQuotes_Preserved()
+    {
+        // UNC path in quotes: "\\server\share" should keep its prefix
+        var result = EmulatorPathUtils.NormalizePathSeparators(@"""\\server\share\file.iso""");
+        Assert.Equal(@"""\\server\share\file.iso""", result);
+    }
+
+    [Fact]
+    public void NormalizePathSeparators_QuotedPathWithDoubleBackslash_Collapsed()
+    {
+        var result = EmulatorPathUtils.NormalizePathSeparators(@"""C:\Games\\My Game\rom.gb""");
+        Assert.Equal(@"""C:\Games\My Game\rom.gb""", result);
+    }
+
+    [Fact]
+    public void NormalizePathSeparators_ArgumentsWithQuotedPath_Collapsed()
+    {
+        var result = EmulatorPathUtils.NormalizePathSeparators(@"-f ""C:\path with space\\file.rom""");
+        Assert.Equal(@"-f ""C:\path with space\file.rom""", result);
+    }
+
+    #endregion
+
+    #region QuoteArgumentsIfNeeded with Normalization Tests
+
+    [Fact]
+    public void QuoteArgumentsIfNeeded_DoubleBackslashInPath_CollapsesAndQuotes()
+    {
+        // Path with double backslash and spaces should normalize then quote
+        var result = EmulatorPathUtils.QuoteArgumentsIfNeeded(
+            @"-batch -slowboot -- X:\Folder1\Folder2\\Resident Evil.iso");
+        Assert.Equal(@"-batch -slowboot -- X:\Folder1\Folder2\Resident Evil.iso", result);
+    }
+
+    [Fact]
+    public void QuoteArgumentsIfNeeded_DoubleBackslashSimplePath_Collapses()
+    {
+        var result = EmulatorPathUtils.QuoteArgumentsIfNeeded(@"C:\Games\\ROMs\Game Boy\\Pokemon Red.gb");
+        Assert.Equal(@"""C:\Games\ROMs\Game Boy\Pokemon Red.gb""", result);
+    }
+
+    #endregion
 }
