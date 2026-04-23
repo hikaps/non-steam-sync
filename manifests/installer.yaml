@@ -1,5 +1,11 @@
 AddonId: f15771cd-b6d7-4a3d-9b8e-08786a13d9c7
 Packages:
+  - Version: 0.7.2
+    RequiredApiVersion: 6.0.0
+    ReleaseDate: 2026-04-23
+    PackageUrl: https://github.com/hikaps/non-steam-sync/releases/download/v0.7.2/SteamShortcutsImporter-v0.7.2.pext
+    Changelog:
+      - Fix double backslashes in emulated game paths causing launch failures
   - Version: 0.7.1
     RequiredApiVersion: 6.0.0
     ReleaseDate: 2026-03-12
