@@ -7,6 +7,26 @@ namespace SteamShortcutsImporter;
 
 internal static class EmulatorPathUtils
 {
+    /// <summary>
+    /// Matches two or more consecutive backslashes that are preceded by a non-separator,
+    /// non-quote, non-whitespace character. This collapses double backslashes from path
+    /// concatenation (e.g., "C:\Games\\" + "\file.iso") while preserving UNC path prefixes
+    /// like \\server\share (which follow whitespace or quotes).
+    /// </summary>
+    private static readonly Regex MultipleBackslashRegex = new Regex(
+        @"(?<=[^\\/""\s])\\{2,}",
+        RegexOptions.Compiled);
+
+    /// <summary>
+    /// Normalizes path separators by collapsing consecutive backslashes to a single backslash.
+    /// Preserves UNC path prefixes (\\server\share) at the start of path segments.
+    /// </summary>
+    public static string NormalizePathSeparators(string? input)
+    {
+        if (string.IsNullOrEmpty(input)) return input ?? string.Empty;
+        return MultipleBackslashRegex.Replace(input, @"\");
+    }
+
     public static bool IsRegexPattern(string? s)
     {
         if (string.IsNullOrEmpty(s))
@@ -43,6 +63,9 @@ internal static class EmulatorPathUtils
         {
             return string.Empty;
         }
+
+        // Normalize double backslashes from path concatenation (e.g., InstallDir trailing \ + filename leading \)
+        args = NormalizePathSeparators(args);
 
         var trimmed = args.Trim();
         if (trimmed.Length == 0)

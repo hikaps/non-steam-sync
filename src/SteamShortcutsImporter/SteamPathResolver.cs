@@ -164,7 +164,7 @@ internal class SteamPathResolver
                 }
             }
 
-            return unquoted;
+            return EmulatorPathUtils.NormalizePathSeparators(unquoted);
         }
         catch (Exception ex)
         {
