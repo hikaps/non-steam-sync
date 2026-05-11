@@ -13,20 +13,9 @@ namespace SteamShortcutsImporter;
 /// </summary>
 internal sealed class SelectionDialogBuilder
 {
-    private const string TextBrushKey = "TextBrush";
-
     private readonly IPlayniteAPI playniteApi;
     private readonly ILogger logger;
     private readonly string pluginName;
-
-    private static Brush GetThemeAwareTextBrush()
-    {
-        if (Application.Current?.TryFindResource(TextBrushKey) is Brush themeBrush)
-        {
-            return themeBrush;
-        }
-        return SystemColors.ControlTextBrush;
-    }
 
     public SelectionDialogBuilder(IPlayniteAPI playniteApi, ILogger logger, string pluginName)
     {
@@ -46,8 +35,8 @@ internal sealed class SelectionDialogBuilder
         Action<List<T>> onConfirm)
     {
         var window = CreateSelectionWindow(title);
-        var (topBar, searchBar, cbOnlyNew, statusText) = CreateTopBar();
-        var (listPanel, contentPanel) = CreateMainContent(topBar);
+        var (topBar, searchBar, cbOnlyNew, statusText, btnSelectAll, btnSelectNone, btnInvert) = CreateTopBar();
+        var (listBox, contentPanel) = CreateMainContent(topBar);
         var (bottomBar, btnConfirm, btnCancel) = CreateBottomBar(confirmLabel);
 
         var grid = new System.Windows.Controls.Grid();
@@ -62,14 +51,38 @@ internal sealed class SelectionDialogBuilder
 
         var checks = new List<System.Windows.Controls.CheckBox>();
 
+        void UpdateStatus()
+        {
+            int selected = checks.Count(c => c.IsChecked == true);
+            int total = checks.Count;
+            statusText.Text = string.Format(Constants.StatusTextFormat, selected, total);
+        }
+
         void Refresh()
         {
-            RefreshList(items, displayText, previewImage, isInitiallyChecked, isNew, searchBar.Text, cbOnlyNew.IsChecked, listPanel, checks, UpdateStatus);
+            RefreshList(items, displayText, previewImage, isInitiallyChecked, isNew, searchBar.Text, cbOnlyNew.IsChecked, listBox, checks, UpdateStatus);
         }
 
         searchBar.TextChanged += (_, __) => Refresh();
         cbOnlyNew.Checked += (_, __) => Refresh();
         cbOnlyNew.Unchecked += (_, __) => Refresh();
+
+        btnSelectAll.Click += (_, __) =>
+        {
+            foreach (var cb in checks) { cb.IsChecked = true; }
+            UpdateStatus();
+        };
+        btnSelectNone.Click += (_, __) =>
+        {
+            foreach (var cb in checks) { cb.IsChecked = false; }
+            UpdateStatus();
+        };
+        btnInvert.Click += (_, __) =>
+        {
+            foreach (var cb in checks) { cb.IsChecked = !cb.IsChecked; }
+            UpdateStatus();
+        };
+
         Refresh();
 
         btnConfirm.Click += (_, __) =>
@@ -90,13 +103,6 @@ internal sealed class SelectionDialogBuilder
         btnCancel.Click += (_, __) => { window.DialogResult = false; window.Close(); };
 
         window.ShowDialog();
-
-        void UpdateStatus()
-        {
-            int selected = checks.Count(c => c.IsChecked == true);
-            int total = checks.Count;
-            statusText.Text = string.Format(Constants.StatusTextFormat, selected, total);
-        }
     }
 
     private System.Windows.Window CreateSelectionWindow(string title)
@@ -110,61 +116,60 @@ internal sealed class SelectionDialogBuilder
         return window;
     }
 
-    private (System.Windows.Controls.StackPanel, System.Windows.Controls.TextBox, System.Windows.Controls.CheckBox, System.Windows.Controls.TextBlock) CreateTopBar()
+    private (System.Windows.Controls.StackPanel, System.Windows.Controls.TextBox, System.Windows.Controls.CheckBox, System.Windows.Controls.TextBlock, System.Windows.Controls.Button, System.Windows.Controls.Button, System.Windows.Controls.Button) CreateTopBar()
     {
-        var textBrush = GetThemeAwareTextBrush();
         var topBar = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, Margin = new System.Windows.Thickness(12, 12, 12, 6) };
-        var lblFilter = new System.Windows.Controls.TextBlock { Text = Constants.FilterLabel, Margin = new System.Windows.Thickness(0, 0, 8, 0), VerticalAlignment = System.Windows.VerticalAlignment.Center, Foreground = textBrush };
-        var searchBar = new System.Windows.Controls.TextBox { Width = 320, Margin = new System.Windows.Thickness(0, 0, 16, 0), Foreground = textBrush };
-        var btnSelectAll = new System.Windows.Controls.Button { Content = Constants.SelectAllLabel, Margin = new System.Windows.Thickness(0, 0, 8, 0), MinWidth = 100, Foreground = textBrush };
-        var btnSelectNone = new System.Windows.Controls.Button { Content = Constants.DeselectAllLabel, MinWidth = 100, Foreground = textBrush };
-        var btnInvert = new System.Windows.Controls.Button { Content = Constants.InvertLabel, Margin = new System.Windows.Thickness(8, 0, 0, 0), MinWidth = 80, Foreground = textBrush };
-        var cbOnlyNew = new System.Windows.Controls.CheckBox { Content = Constants.OnlyNewLabel, Margin = new System.Windows.Thickness(12, 0, 0, 0), VerticalAlignment = System.Windows.VerticalAlignment.Center, Foreground = textBrush };
+        var lblFilter = new System.Windows.Controls.TextBlock { Text = Constants.FilterLabel, Margin = new System.Windows.Thickness(0, 0, 8, 0), VerticalAlignment = System.Windows.VerticalAlignment.Center };
+        var searchBar = new System.Windows.Controls.TextBox { Width = 320, Margin = new System.Windows.Thickness(0, 0, 16, 0) };
+        var btnSelectAll = new System.Windows.Controls.Button { Content = Constants.SelectAllLabel, Margin = new System.Windows.Thickness(0, 0, 8, 0), MinWidth = 100 };
+        var btnSelectNone = new System.Windows.Controls.Button { Content = Constants.DeselectAllLabel, MinWidth = 100 };
+        var btnInvert = new System.Windows.Controls.Button { Content = Constants.InvertLabel, Margin = new System.Windows.Thickness(8, 0, 0, 0), MinWidth = 80 };
+        var cbOnlyNew = new System.Windows.Controls.CheckBox { Content = Constants.OnlyNewLabel, Margin = new System.Windows.Thickness(12, 0, 0, 0), VerticalAlignment = System.Windows.VerticalAlignment.Center };
         topBar.Children.Add(lblFilter);
         topBar.Children.Add(searchBar);
         topBar.Children.Add(btnSelectAll);
         topBar.Children.Add(btnSelectNone);
         topBar.Children.Add(btnInvert);
         topBar.Children.Add(cbOnlyNew);
-        var statusText = new System.Windows.Controls.TextBlock { Margin = new System.Windows.Thickness(16, 0, 0, 0), VerticalAlignment = System.Windows.VerticalAlignment.Center, Opacity = 1.0, Foreground = textBrush };
+        var statusText = new System.Windows.Controls.TextBlock { Margin = new System.Windows.Thickness(16, 0, 0, 0), VerticalAlignment = System.Windows.VerticalAlignment.Center };
         topBar.Children.Add(statusText);
-        return (topBar, searchBar, cbOnlyNew, statusText);
+        return (topBar, searchBar, cbOnlyNew, statusText, btnSelectAll, btnSelectNone, btnInvert);
     }
 
-    private (System.Windows.Controls.StackPanel, System.Windows.Controls.Grid) CreateMainContent(System.Windows.Controls.StackPanel topBar)
+    private (System.Windows.Controls.ListBox, System.Windows.Controls.Grid) CreateMainContent(System.Windows.Controls.StackPanel topBar)
     {
         var contentGrid = new System.Windows.Controls.Grid();
         contentGrid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = System.Windows.GridLength.Auto });
         contentGrid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = new System.Windows.GridLength(1, System.Windows.GridUnitType.Star) });
         System.Windows.Controls.Grid.SetRow(topBar, 0);
         contentGrid.Children.Add(topBar);
-        var listPanel = new System.Windows.Controls.StackPanel { Margin = new System.Windows.Thickness(12, 0, 12, 0) };
-        var scroll = new System.Windows.Controls.ScrollViewer
+        var listBox = new System.Windows.Controls.ListBox
         {
-            Content = listPanel,
-            VerticalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto,
-            HorizontalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Disabled
+            Margin = new System.Windows.Thickness(12, 0, 12, 0),
+            Background = Brushes.Transparent,
+            BorderThickness = new System.Windows.Thickness(0),
+            HorizontalContentAlignment = System.Windows.HorizontalAlignment.Stretch
         };
-        System.Windows.Controls.Grid.SetRow(scroll, 1);
-        contentGrid.Children.Add(scroll);
-        return (listPanel, contentGrid);
+        System.Windows.Controls.VirtualizingStackPanel.SetIsVirtualizing(listBox, true);
+        System.Windows.Controls.ScrollViewer.SetCanContentScroll(listBox, true);
+        System.Windows.Controls.Grid.SetRow(listBox, 1);
+        contentGrid.Children.Add(listBox);
+        return (listBox, contentGrid);
     }
 
     private (System.Windows.Controls.StackPanel, System.Windows.Controls.Button, System.Windows.Controls.Button) CreateBottomBar(string confirmLabel)
     {
-        var textBrush = GetThemeAwareTextBrush();
         var bottom = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, Margin = new System.Windows.Thickness(12, 6, 12, 12), HorizontalAlignment = System.Windows.HorizontalAlignment.Right };
-        var btnConfirm = new System.Windows.Controls.Button { Content = confirmLabel, Margin = new System.Windows.Thickness(0, 0, 8, 0), MinWidth = 150, Foreground = textBrush };
-        var btnCancel = new System.Windows.Controls.Button { Content = Constants.CancelLabel, MinWidth = 100, Foreground = textBrush };
+        var btnConfirm = new System.Windows.Controls.Button { Content = confirmLabel, Margin = new System.Windows.Thickness(0, 0, 8, 0), MinWidth = 150 };
+        var btnCancel = new System.Windows.Controls.Button { Content = Constants.CancelLabel, MinWidth = 100 };
         bottom.Children.Add(btnConfirm);
         bottom.Children.Add(btnCancel);
         return (bottom, btnConfirm, btnCancel);
     }
 
-    private void RefreshList<T>(List<T> items, Func<T, string> displayText, Func<T, string?> previewImage, Func<T, bool> isInitiallyChecked, Func<T, bool> isNew, string? filter, bool? onlyNew, System.Windows.Controls.StackPanel listPanel, List<System.Windows.Controls.CheckBox> checks, Action updateStatus)
+    private void RefreshList<T>(List<T> items, Func<T, string> displayText, Func<T, string?> previewImage, Func<T, bool> isInitiallyChecked, Func<T, bool> isNew, string? filter, bool? onlyNew, System.Windows.Controls.ListBox listBox, List<System.Windows.Controls.CheckBox> checks, Action updateStatus)
     {
-        var textBrush = GetThemeAwareTextBrush();
-        listPanel.Children.Clear();
+        listBox.Items.Clear();
         checks.Clear();
 
         foreach (var it in items)
@@ -178,16 +183,16 @@ internal sealed class SelectionDialogBuilder
             {
                 continue;
             }
-            var cb = new System.Windows.Controls.CheckBox { Content = BuildListItemWithPreview(name, previewImage(it), textBrush), IsChecked = isInitiallyChecked(it), Tag = it, Margin = new System.Windows.Thickness(0, 4, 0, 4), Foreground = textBrush };
+            var cb = new System.Windows.Controls.CheckBox { Content = BuildListItemWithPreview(name, previewImage(it)), IsChecked = isInitiallyChecked(it), Tag = it, Margin = new System.Windows.Thickness(0, 4, 0, 4) };
             cb.Checked += (_, __) => updateStatus();
             cb.Unchecked += (_, __) => updateStatus();
             checks.Add(cb);
-            listPanel.Children.Add(cb);
+            listBox.Items.Add(cb);
         }
         updateStatus();
     }
 
-    private object BuildListItemWithPreview(string text, string? imagePath, Brush textBrush)
+    private object BuildListItemWithPreview(string text, string? imagePath)
     {
         var grid = new System.Windows.Controls.Grid();
         grid.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition { Width = System.Windows.GridLength.Auto });
@@ -197,12 +202,17 @@ internal sealed class SelectionDialogBuilder
         {
             try
             {
+                var bmp = new System.Windows.Media.Imaging.BitmapImage();
+                bmp.BeginInit();
+                bmp.UriSource = new Uri(imagePath);
+                bmp.DecodePixelWidth = 96;
+                bmp.EndInit();
                 var img = new System.Windows.Controls.Image
                 {
                     Width = 48,
                     Height = 48,
                     Margin = new System.Windows.Thickness(0, 0, 8, 0),
-                    Source = new System.Windows.Media.Imaging.BitmapImage(new Uri(imagePath))
+                    Source = bmp
                 };
                 System.Windows.Controls.Grid.SetColumn(img, 0);
                 grid.Children.Add(img);
@@ -217,7 +227,6 @@ internal sealed class SelectionDialogBuilder
         {
             Text = text,
             VerticalAlignment = System.Windows.VerticalAlignment.Center,
-            Foreground = textBrush,
             TextTrimming = System.Windows.TextTrimming.CharacterEllipsis,
             TextWrapping = System.Windows.TextWrapping.NoWrap
         };
