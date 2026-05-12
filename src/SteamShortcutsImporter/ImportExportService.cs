@@ -396,6 +396,16 @@ internal class ImportExportService
                 exists = existingById.ContainsKey(computed);
             }
 
+            // Name-based fallback: check if any existing Steam shortcut has a matching AppName
+            // (case-insensitive). This detects manually-created Steam shortcuts that wouldn't
+            // match by AppId, StableId, or ExportMap, so the selection dialog shows the
+            // "already in Steam" tag for name-matched games.
+            if (!exists && !string.IsNullOrEmpty(name))
+            {
+                exists = existingById.Values.Any(sc =>
+                    string.Equals(sc.AppName, name, StringComparison.OrdinalIgnoreCase));
+            }
+
             var displayAction = primaryAction ?? fileAction;
             var target = displayAction != null
                 ? (displayAction.Type == GameActionType.File
@@ -1043,6 +1053,71 @@ internal class ImportExportService
             if (maybeAppId != 0)
             {
                 resolvedExistingAppId = maybeAppId;
+            }
+        }
+
+        // Name-based fallback with user confirmation: when no identity match was found via
+        // ExportMap or URL action, scan for existing Steam shortcuts whose AppName matches
+        // case-insensitively. This allows merging onto manually-created shortcuts while
+        // preserving the original AppId (controller profiles are bound to AppId).
+        if (resolvedExistingAppId == 0)
+        {
+            try
+            {
+                var nameMatches = existing
+                    .Where(kv => string.Equals(kv.Value.AppName, name, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+
+                if (nameMatches.Count == 1)
+                {
+                    var matched = nameMatches[0];
+                    var confirm = _library.PlayniteApi.Dialogs.ShowMessage(
+                        string.Format("A Steam shortcut named '{0}' already exists. Merge onto it (preserving AppId and controller profile)?", name),
+                        _library.Name,
+                        System.Windows.MessageBoxButton.YesNo,
+                        System.Windows.MessageBoxImage.Question);
+
+                    if (confirm == System.Windows.MessageBoxResult.Yes)
+                    {
+                        resolvedExistingAppId = matched.Key;
+                    }
+                }
+                else if (nameMatches.Count > 1)
+                {
+                    var matchOptions = new List<GenericItemOption>();
+                    foreach (var kv in nameMatches)
+                    {
+                        matchOptions.Add(new GenericItemOption(
+                            kv.Value.AppName + " [" + kv.Key + "]",
+                            "Exe: " + (kv.Value.Exe ?? "(unknown)")));
+                    }
+                    matchOptions.Add(new GenericItemOption("Create new entry", "Skip merge and create a new shortcut"));
+
+                    var chosen = _library.PlayniteApi.Dialogs.ChooseItemWithSearch(
+                        matchOptions,
+                        (search) => string.IsNullOrEmpty(search)
+                            ? matchOptions
+                            : matchOptions.Where(o =>
+                                o.Name.IndexOf(search, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                o.Description.IndexOf(search, StringComparison.OrdinalIgnoreCase) >= 0).ToList(),
+                        null,
+                        "Select shortcut to merge '" + name + "' onto");
+
+                    if (chosen != null && chosen.Name != "Create new entry")
+                    {
+                        var start = chosen.Name.LastIndexOf('[');
+                        var end = chosen.Name.LastIndexOf(']');
+                        if (start >= 0 && end > start
+                            && uint.TryParse(chosen.Name.Substring(start + 1, end - start - 1), out var chosenAppId))
+                        {
+                            resolvedExistingAppId = chosenAppId;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, $"Name-based fallback failed for '{name}'.");
             }
         }
 
