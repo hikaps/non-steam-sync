@@ -396,6 +396,13 @@ internal class ImportExportService
                 exists = existingById.ContainsKey(computed);
             }
 
+            // Name-based fallback: a manually-created Steam shortcut with the same name is a
+            // merge candidate at export time, so tag it as already in Steam.
+            if (!exists && !string.IsNullOrEmpty(name))
+            {
+                exists = FindNameMatches(name, existingById, byPlayniteId).Count > 0;
+            }
+
             var displayAction = primaryAction ?? fileAction;
             var target = displayAction != null
                 ? (displayAction.Type == GameActionType.File
@@ -1030,6 +1037,81 @@ internal class ImportExportService
 
     
 
+    /// <summary>
+    /// Existing Steam shortcuts whose AppName equals <paramref name="name"/> (case-insensitive)
+    /// and that are not already bound to a Playnite game through the export map.
+    /// </summary>
+    internal static List<KeyValuePair<uint, SteamShortcut>> FindNameMatches(string name, Dictionary<uint, SteamShortcut> existing, Dictionary<string, uint> byPlayniteId)
+    {
+        if (string.IsNullOrEmpty(name))
+        {
+            return new List<KeyValuePair<uint, SteamShortcut>>();
+        }
+
+        var mapped = new HashSet<uint>(byPlayniteId.Values);
+        return existing
+            .Where(kv => !mapped.Contains(kv.Key)
+                && string.Equals(kv.Value.AppName, name, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+    }
+
+    /// <summary>
+    /// Asks the user whether to merge a game onto an unmapped Steam shortcut with the same name,
+    /// preserving its AppId (controller profiles are bound to AppId). Returns 0 for no merge.
+    /// A declined merge creates a new shortcut, which is then recorded in the export map, so
+    /// the question is not asked again for that game.
+    /// </summary>
+    private uint ResolveExistingByName(string name, Dictionary<uint, SteamShortcut> existing, Dictionary<string, uint> byPlayniteId)
+    {
+        try
+        {
+            var matches = FindNameMatches(name, existing, byPlayniteId);
+            if (matches.Count == 0)
+            {
+                return 0;
+            }
+
+            var dialogs = _library.PlayniteApi.Dialogs;
+            if (matches.Count == 1)
+            {
+                var confirm = dialogs.ShowMessage(
+                    $"A Steam shortcut named '{name}' already exists. Merge onto it (preserving AppId and controller profile)?",
+                    _library.Name,
+                    System.Windows.MessageBoxButton.YesNo,
+                    System.Windows.MessageBoxImage.Question);
+                return confirm == System.Windows.MessageBoxResult.Yes ? matches[0].Key : 0u;
+            }
+
+            const string createNew = "Create new entry";
+            var byLabel = new Dictionary<string, uint>();
+            var options = new List<GenericItemOption>();
+            foreach (var kv in matches)
+            {
+                var label = $"{kv.Value.AppName} [{kv.Key}]";
+                byLabel[label] = kv.Key;
+                options.Add(new GenericItemOption(label, "Exe: " + (kv.Value.Exe ?? "(unknown)")));
+            }
+            options.Add(new GenericItemOption(createNew, "Skip merge and create a new shortcut"));
+
+            var chosen = dialogs.ChooseItemWithSearch(
+                options,
+                search => string.IsNullOrEmpty(search)
+                    ? options
+                    : options.Where(o =>
+                        o.Name.IndexOf(search, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        o.Description.IndexOf(search, StringComparison.OrdinalIgnoreCase) >= 0).ToList(),
+                null,
+                $"Select shortcut to merge '{name}' onto");
+
+            return chosen != null && byLabel.TryGetValue(chosen.Name, out var chosenAppId) ? chosenAppId : 0u;
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn(ex, $"Name-based fallback failed for '{name}'.");
+            return 0;
+        }
+    }
+
     private uint CreateOrUpdateShortcut(Game g, string exePath, string? workDir, string name, GameAction action, List<SteamShortcut> shortcuts, Dictionary<uint, SteamShortcut> existing, Dictionary<string, uint> byPlayniteId, ref int added, ref int updated)
     {
         uint resolvedExistingAppId = 0;
@@ -1044,6 +1126,11 @@ internal class ImportExportService
             {
                 resolvedExistingAppId = maybeAppId;
             }
+        }
+
+        if (resolvedExistingAppId == 0)
+        {
+            resolvedExistingAppId = ResolveExistingByName(name, existing, byPlayniteId);
         }
 
         // Split quoted exe path from trailing arguments (e.g. '"C:\Game\game.exe" -arg').
