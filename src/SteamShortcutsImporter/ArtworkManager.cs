@@ -66,6 +66,9 @@ internal class ArtworkManager
             if (!string.IsNullOrEmpty(game.Icon))
             {
                 CopyIfExists(game.Icon, appId + "_icon");
+                // Steam's logo slot (<id>_logo) expects a transparent title wordmark, which
+                // Playnite has no field for. Reuse the icon as the closest emblem-shaped proxy.
+                CopyIfExists(game.Icon, appId + "_logo");
             }
 
             if (!string.IsNullOrEmpty(game.BackgroundImage))

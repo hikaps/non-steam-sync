@@ -2,6 +2,9 @@ using System;
 using System.IO;
 using System.Linq;
 using Xunit;
+using NSubstitute;
+using Playnite.SDK;
+using Playnite.SDK.Models;
 
 namespace SteamShortcutsImporter.Tests;
 
@@ -205,6 +208,40 @@ public class ArtworkManagerTests
         {
             if (Directory.Exists(tempDir))
                 Directory.Delete(tempDir, recursive: true);
+        }
+    }
+    [Fact]
+    public void TryExportArtworkToGrid_WritesIconAsLogoProxy()
+    {
+        var tempRoot = Path.Combine(Path.GetTempPath(), "ssi-test-" + Guid.NewGuid().ToString("N"));
+        var gridDir = Path.Combine(tempRoot, "grid");
+        var srcDir = Path.Combine(tempRoot, "src");
+        Directory.CreateDirectory(srcDir);
+        var srcIcon = Path.Combine(srcDir, "icon.png");
+        File.WriteAllBytes(srcIcon, new byte[] { 1 });
+
+        var db = Substitute.For<IGameDatabaseAPI>();
+        db.GetFullFilePath(Arg.Any<string>()).Returns(srcIcon);
+
+        var api = Substitute.For<IPlayniteAPI>();
+        api.Database.Returns(db);
+
+        var manager = new ArtworkManager(api);
+        var game = new Game("Test Game") { Icon = "icon-db-id" };
+        const uint appId = 1234567890u;
+
+        try
+        {
+            manager.TryExportArtworkToGrid(game, appId, gridDir);
+
+            Assert.True(File.Exists(Path.Combine(gridDir, appId + "_icon.png")),
+                "icon slot should be written");
+            Assert.True(File.Exists(Path.Combine(gridDir, appId + "_logo.png")),
+                "logo slot should be written using the icon as proxy");
+        }
+        finally
+        {
+            if (Directory.Exists(tempRoot)) Directory.Delete(tempRoot, recursive: true);
         }
     }
 }
