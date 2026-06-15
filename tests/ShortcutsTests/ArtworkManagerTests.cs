@@ -2,8 +2,6 @@ using System;
 using System.IO;
 using System.Linq;
 using Xunit;
-using NSubstitute;
-using Playnite.SDK;
 using Playnite.SDK.Models;
 
 namespace SteamShortcutsImporter.Tests;
@@ -211,37 +209,31 @@ public class ArtworkManagerTests
         }
     }
     [Fact]
-    public void TryExportArtworkToGrid_WritesIconAsLogoProxy()
+    public void GetExportTargets_IconAlsoMapsToLogoSlot()
     {
-        var tempRoot = Path.Combine(Path.GetTempPath(), "ssi-test-" + Guid.NewGuid().ToString("N"));
-        var gridDir = Path.Combine(tempRoot, "grid");
-        var srcDir = Path.Combine(tempRoot, "src");
-        Directory.CreateDirectory(srcDir);
-        var srcIcon = Path.Combine(srcDir, "icon.png");
-        File.WriteAllBytes(srcIcon, new byte[] { 1 });
-
-        var db = Substitute.For<IGameDatabaseAPI>();
-        db.GetFullFilePath(Arg.Any<string>()).Returns(srcIcon);
-
-        var api = Substitute.For<IPlayniteAPI>();
-        api.Database.Returns(db);
-
-        var manager = new ArtworkManager(api);
+        // Playnite has no logo field, so the icon is reused for Steam's logo slot (#31).
         var game = new Game("Test Game") { Icon = "icon-db-id" };
         const uint appId = 1234567890u;
 
-        try
-        {
-            manager.TryExportArtworkToGrid(game, appId, gridDir);
+        var bases = ArtworkManager.GetExportTargets(game, appId).Select(t => t.TargetBase).ToList();
 
-            Assert.True(File.Exists(Path.Combine(gridDir, appId + "_icon.png")),
-                "icon slot should be written");
-            Assert.True(File.Exists(Path.Combine(gridDir, appId + "_logo.png")),
-                "logo slot should be written using the icon as proxy");
-        }
-        finally
+        Assert.Contains(appId + "_icon", bases);
+        Assert.Contains(appId + "_logo", bases);
+    }
+
+    [Fact]
+    public void GetExportTargets_MapsAllAssetsToExpectedSlots()
+    {
+        var game = new Game("Test Game")
         {
-            if (Directory.Exists(tempRoot)) Directory.Delete(tempRoot, recursive: true);
-        }
+            CoverImage = "cover-id",
+            Icon = "icon-id",
+            BackgroundImage = "bg-id"
+        };
+        const uint appId = 42u;
+
+        var bases = ArtworkManager.GetExportTargets(game, appId).Select(t => t.TargetBase).ToList();
+
+        Assert.Equal(new[] { "42", "42p", "42_icon", "42_logo", "42_hero" }, bases);
     }
 }

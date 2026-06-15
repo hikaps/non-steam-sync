@@ -1,5 +1,6 @@
 using Playnite.SDK;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
@@ -37,7 +38,7 @@ internal class ArtworkManager
     }
 
     /// <summary>
-    /// Exports game artwork (cover, icon, background) to Steam grid folder.
+    /// Exports game artwork (cover, icon, background, plus a logo proxy) to the Steam grid folder.
     /// </summary>
     public void TryExportArtworkToGrid(Playnite.SDK.Models.Game game, uint appId, string? gridDir)
     {
@@ -57,28 +58,40 @@ internal class ArtworkManager
                 File.Copy(src, dst, overwrite: true);
             }
 
-            if (!string.IsNullOrEmpty(game.CoverImage))
+            foreach (var (source, targetBase) in GetExportTargets(game, appId))
             {
-                CopyIfExists(game.CoverImage, appId.ToString());
-                CopyIfExists(game.CoverImage, appId + "p");
-            }
-
-            if (!string.IsNullOrEmpty(game.Icon))
-            {
-                CopyIfExists(game.Icon, appId + "_icon");
-                // Steam's logo slot (<id>_logo) expects a transparent title wordmark, which
-                // Playnite has no field for. Reuse the icon as the closest emblem-shaped proxy.
-                CopyIfExists(game.Icon, appId + "_logo");
-            }
-
-            if (!string.IsNullOrEmpty(game.BackgroundImage))
-            {
-                CopyIfExists(game.BackgroundImage, appId + "_hero");
+                CopyIfExists(source, targetBase);
             }
         }
         catch (Exception ex)
         {
             Logger.Warn(ex, $"Failed exporting artwork to grid for appId={appId}");
+        }
+    }
+
+    /// <summary>
+    /// Maps a Playnite game's artwork fields to the Steam grid filename bases (no extension)
+    /// they should be copied to. Playnite has no logo field, so the game icon is reused as the
+    /// closest emblem-shaped proxy for Steam's logo slot.
+    /// </summary>
+    internal static IEnumerable<(string Source, string TargetBase)> GetExportTargets(Playnite.SDK.Models.Game game, uint appId)
+    {
+        if (!string.IsNullOrEmpty(game.CoverImage))
+        {
+            yield return (game.CoverImage, appId.ToString());
+            yield return (game.CoverImage, appId + "p");
+        }
+
+        if (!string.IsNullOrEmpty(game.Icon))
+        {
+            yield return (game.Icon, appId + "_icon");
+            // Playnite has no logo field; reuse the icon for Steam's logo slot (#31).
+            yield return (game.Icon, appId + "_logo");
+        }
+
+        if (!string.IsNullOrEmpty(game.BackgroundImage))
+        {
+            yield return (game.BackgroundImage, appId + "_hero");
         }
     }
 
