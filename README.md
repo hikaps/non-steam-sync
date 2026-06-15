@@ -13,7 +13,7 @@ I love Playnite as a clean, flexible launcher, but Steam offers the best control
 ## Features
 
 - **Two-way sync** between Steam shortcuts and Playnite
-- **Artwork support** — covers, icons, and backgrounds are imported/exported automatically
+- **Artwork support** — covers, icons, and backgrounds sync between Playnite and Steam; logos are exported to Steam
 - **Launch via Steam** — use `steam://rungameid/...` URLs for full controller and overlay support
 - **Automatic write-back** — edits in Playnite sync back to Steam (name, artwork, play actions)
 - **Backup & restore** — automatic backups before changes, with easy restore from settings
@@ -67,7 +67,7 @@ I love Playnite as a clean, flexible launcher, but Steam offers the best control
 1. **Main menu → Steam Shortcuts → "Sync Playnite → Steam…"**
 2. Select games with a file-based play action
 3. Click **Export** — games are added/updated in `shortcuts.vdf`
-4. Covers, icons, and backgrounds are copied to Steam's grid folder
+4. Covers, icons, backgrounds, and a logo (reusing the icon) are copied to Steam's grid folder
 
 ### Automatic Write-back
 
