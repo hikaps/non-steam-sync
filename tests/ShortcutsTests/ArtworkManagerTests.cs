@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using Xunit;
+using Playnite.SDK.Models;
 
 namespace SteamShortcutsImporter.Tests;
 
@@ -206,5 +207,33 @@ public class ArtworkManagerTests
             if (Directory.Exists(tempDir))
                 Directory.Delete(tempDir, recursive: true);
         }
+    }
+    [Fact]
+    public void GetExportTargets_IconAlsoMapsToLogoSlot()
+    {
+        // Playnite has no logo field, so the icon is reused for Steam's logo slot (#31).
+        var game = new Game("Test Game") { Icon = "icon-db-id" };
+        const uint appId = 1234567890u;
+
+        var bases = ArtworkManager.GetExportTargets(game, appId).Select(t => t.TargetBase).ToList();
+
+        Assert.Contains(appId + "_icon", bases);
+        Assert.Contains(appId + "_logo", bases);
+    }
+
+    [Fact]
+    public void GetExportTargets_MapsAllAssetsToExpectedSlots()
+    {
+        var game = new Game("Test Game")
+        {
+            CoverImage = "cover-id",
+            Icon = "icon-id",
+            BackgroundImage = "bg-id"
+        };
+        const uint appId = 42u;
+
+        var bases = ArtworkManager.GetExportTargets(game, appId).Select(t => t.TargetBase).ToList();
+
+        Assert.Equal(new[] { "42", "42p", "42_icon", "42_logo", "42_hero" }, bases);
     }
 }
