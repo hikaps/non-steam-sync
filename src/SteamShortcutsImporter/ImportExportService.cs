@@ -1127,7 +1127,7 @@ internal class ImportExportService
                 _library.EnsureFileActionForExternalGame(g, exePath, workDir, fileArgs);
             }
             
-            if (_library.Settings.LaunchViaSteam && appId != 0) { _library.EnsureSteamPlayActionForExternalGame(g, appId, workDir); }
+            if (_library.Settings.LaunchViaSteam && appId != 0) { _library.EnsureSteamPlayActionForExternalGame(g, appId, workDir, _library.Settings.SteamActionIsDefault); }
         }
         catch (Exception ex)
         {

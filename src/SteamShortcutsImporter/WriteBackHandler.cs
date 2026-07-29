@@ -211,7 +211,7 @@ internal class WriteBackHandler : IDisposable
 
             var expectedUrl = $"{Constants.SteamRungameIdUrl}{Utils.ToShortcutGameId(sc.AppId)}";
             var trackingPath = GameActionUtilities.DeriveTrackingPath(sc.StartDir, sc.Exe?.Trim('"'), _logger, sc.AppName);
-            var changed = GameActionUtilities.EnsureSteamLaunchAction(game.GameActions as IList<GameAction>, expectedUrl, trackingPath, out var updated, out _);
+            var changed = GameActionUtilities.EnsureSteamLaunchAction(game.GameActions as IList<GameAction>, expectedUrl, trackingPath, _settings.SteamActionIsDefault, out var updated, out _);
             if (!changed)
             {
                 return;

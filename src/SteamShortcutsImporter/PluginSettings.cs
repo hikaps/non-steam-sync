@@ -12,19 +12,32 @@ namespace SteamShortcutsImporter;
 public class PluginSettings : ISettings
 {
     private readonly LibraryPlugin? _plugin;
+    private bool _originalSteamActionIsDefault;
 
     public string SteamRootPath { get; set; } = string.Empty;
     public bool LaunchViaSteam { get; set; } = true;
+    public bool SteamActionIsDefault { get; set; } = true;
     public string? SelectedSteamUserId { get; set; } = null;
     public Dictionary<string, string> ExportMap { get; set; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-    public void BeginEdit() { }
+    public void BeginEdit() { _originalSteamActionIsDefault = SteamActionIsDefault; }
     public void CancelEdit() { }
     public void EndEdit()
     {
         if (_plugin != null)
         {
             _plugin.SavePluginSettings(this);
+            if (SteamActionIsDefault != _originalSteamActionIsDefault)
+            {
+                try
+                {
+                    ShortcutsLibrary.ReapplyPlayActionsForAllGames();
+                }
+                catch (Exception ex)
+                {
+                    LogManager.GetLogger().Error(ex, "Failed to reapply play actions after SteamActionIsDefault change.");
+                }
+            }
         }
     }
 
@@ -50,6 +63,7 @@ public class PluginSettings : ISettings
             {
                 SteamRootPath = saved.SteamRootPath;
                 LaunchViaSteam = saved.LaunchViaSteam;
+                SteamActionIsDefault = saved.SteamActionIsDefault;
                 SelectedSteamUserId = saved.SelectedSteamUserId;
                 ExportMap = saved.ExportMap ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             }
@@ -57,6 +71,7 @@ public class PluginSettings : ISettings
             {
                 SteamRootPath = GuessSteamRootPath() ?? string.Empty;
                 LaunchViaSteam = true;
+                SteamActionIsDefault = true;
                 SelectedSteamUserId = null;
                 ExportMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             }
@@ -66,6 +81,7 @@ public class PluginSettings : ISettings
             LogManager.GetLogger().Error(ex, "Failed to load saved settings, falling back to defaults.");
             SteamRootPath = GuessSteamRootPath() ?? string.Empty;
             LaunchViaSteam = true;
+            SteamActionIsDefault = true;
             SelectedSteamUserId = null;
             ExportMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         }

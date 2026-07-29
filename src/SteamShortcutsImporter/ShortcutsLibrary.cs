@@ -448,9 +448,9 @@ public class ShortcutsLibrary : LibraryPlugin
         var actions = new List<GameAction>();
         if (Settings.LaunchViaSteam && sc.AppId != 0)
         {
-            // Steam URL default, keep direct exe as secondary
-            actions.Add(BuildSteamUrlAction(sc, isDefault: true));
-            actions.Add(BuildFilePlayAction(sc, isDefault: false));
+            var steamIsDefault = Settings.SteamActionIsDefault;
+            actions.Add(BuildSteamUrlAction(sc, isDefault: steamIsDefault));
+            actions.Add(BuildFilePlayAction(sc, isDefault: !steamIsDefault));
         }
         else
         {
@@ -471,7 +471,7 @@ public class ShortcutsLibrary : LibraryPlugin
 
             var expectedUrl = $"{Constants.SteamRungameIdUrl}{Utils.ToShortcutGameId(sc.AppId)}";
             var trackingPath = GameActionUtilities.DeriveTrackingPath(sc.StartDir, sc.Exe, Logger, sc.AppName);
-            var changed = GameActionUtilities.EnsureSteamLaunchAction(game.GameActions as IList<GameAction>, expectedUrl, trackingPath, out var updated, out _);
+            var changed = GameActionUtilities.EnsureSteamLaunchAction(game.GameActions as IList<GameAction>, expectedUrl, trackingPath, Settings.SteamActionIsDefault, out var updated, out _);
             if (!changed)
             {
                 return;
@@ -487,7 +487,7 @@ public class ShortcutsLibrary : LibraryPlugin
         }
     }
 
-    internal void EnsureSteamPlayActionForExternalGame(Game game, uint appId, string? trackingPath = null)
+    internal void EnsureSteamPlayActionForExternalGame(Game game, uint appId, string? trackingPath = null, bool? steamActionIsDefault = null)
     {
         if (appId == 0)
         {
@@ -498,7 +498,8 @@ public class ShortcutsLibrary : LibraryPlugin
         var existing = game.GameActions as IList<GameAction>;
         // Use provided tracking path, or fall back to game's install directory
         var effectiveTrackingPath = trackingPath ?? game.InstallDirectory;
-        var changed = GameActionUtilities.EnsureSteamLaunchAction(existing, expectedUrl, effectiveTrackingPath, out var updated, out _);
+        var effectiveIsDefault = steamActionIsDefault ?? Settings.SteamActionIsDefault;
+        var changed = GameActionUtilities.EnsureSteamLaunchAction(existing, expectedUrl, effectiveTrackingPath, effectiveIsDefault, out var updated, out _);
         if (!changed)
         {
             return;
@@ -533,5 +534,56 @@ public class ShortcutsLibrary : LibraryPlugin
         }
     }
 
+    public static void ReapplyPlayActionsForAllGames()
+    {
+        var instance = Instance;
+        if (instance == null) return;
+
+        try
+        {
+            var games = instance.PlayniteApi.Database.Games
+                .Where(g => g.GameActions != null && g.GameActions.Any(a =>
+                    a.Type == GameActionType.URL &&
+                    string.Equals(a.Name, Constants.PlaySteamActionName, StringComparison.Ordinal)))
+                .ToList();
+
+            foreach (var game in games)
+            {
+                try
+                {
+                    var steamAction = game.GameActions?.FirstOrDefault(a =>
+                        a.Type == GameActionType.URL &&
+                        a.Name == Constants.PlaySteamActionName);
+
+                    if (steamAction == null) continue;
+
+                    var expectedUrl = steamAction.Path;
+                    var trackingPath = steamAction.TrackingPath ?? game.InstallDirectory;
+
+                    var changed = GameActionUtilities.EnsureSteamLaunchAction(
+                        game.GameActions as IList<GameAction>,
+                        expectedUrl,
+                        trackingPath,
+                        instance.Settings.SteamActionIsDefault,
+                        out var updated,
+                        out _);
+
+                    if (changed)
+                    {
+                        game.GameActions = new System.Collections.ObjectModel.ObservableCollection<GameAction>(updated);
+                        instance.PlayniteApi.Database.Games.Update(game);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warn(ex, $"Failed to reapply play actions for game '{game.Name}'");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex, "Failed to reapply play actions for all games.");
+        }
+    }
 
 }
