@@ -64,12 +64,12 @@ public class ShortcutsFileTests
     }
 
     [Fact]
-    public void ToObject_WhitespaceOnlyExe_StaysEmpty()
+    public void ToObject_WhitespaceOnlyExe_StaysAsIs()
     {
         var sc = new SteamShortcut { Exe = "   ", AppName = "Test" };
 
         var obj = ShortcutsFile.ToObject(sc);
 
-        Assert.Equal("", obj["exe"]);
+        Assert.Equal("   ", obj["exe"]);
     }
 }
