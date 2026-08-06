@@ -297,3 +297,70 @@ public class UtilsTests
         Assert.Equal("\"path\"", Utils.NormalizePath("\"\"path\"\""));
     }
 }
+
+    // SplitExeAndArgs tests
+
+    [Fact]
+    public void SplitExeAndArgs_QuotedExeWithArgs_SplitsCorrectly()
+    {
+        var (exe, args) = Utils.SplitExeAndArgs("\"D:\\Games\\Portal Prelude\\hl2.exe\" -game portalprelude -steam -novid");
+
+        Assert.Equal("\"D:\\Games\\Portal Prelude\\hl2.exe\"", exe);
+        Assert.Equal("-game portalprelude -steam -novid", args);
+    }
+
+    [Fact]
+    public void SplitExeAndArgs_QuotedExeNoArgs_ReturnsExeOnly()
+    {
+        var (exe, args) = Utils.SplitExeAndArgs("\"C:\\Games\\Foo.exe\"");
+
+        Assert.Equal("\"C:\\Games\\Foo.exe\"", exe);
+        Assert.Equal("", args);
+    }
+
+    [Fact]
+    public void SplitExeAndArgs_UnquotedExe_ReturnsFullPath()
+    {
+        var (exe, args) = Utils.SplitExeAndArgs("C:\\Games\\Foo.exe");
+
+        Assert.Equal("C:\\Games\\Foo.exe", exe);
+        Assert.Equal("", args);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("  ")]
+    public void SplitExeAndArgs_EmptyOrWhitespace_ReturnsEmpty(string input)
+    {
+        var (exe, args) = Utils.SplitExeAndArgs(input);
+
+        Assert.Equal("", exe);
+        Assert.Equal("", args);
+    }
+
+    [Fact]
+    public void SplitExeAndArgs_QuotedExeWithSpacesAndArgs_PreservesInnerSpaces()
+    {
+        var (exe, args) = Utils.SplitExeAndArgs("\"C:\\Program Files\\Game\\game.exe\" --fullscreen --width 1920");
+
+        Assert.Equal("\"C:\\Program Files\\Game\\game.exe\"", exe);
+        Assert.Equal("--fullscreen --width 1920", args);
+    }
+
+    [Fact]
+    public void SplitExeAndArgs_UnmatchedQuote_TreatsAsExe()
+    {
+        var (exe, args) = Utils.SplitExeAndArgs("\"C:\\unfinished path");
+
+        Assert.Equal("\"C:\\unfinished path", exe);
+        Assert.Equal("", args);
+    }
+
+    [Fact]
+    public void SplitExeAndArgs_TrailingWhitespaceAfterArgs_Trims()
+    {
+        var (exe, args) = Utils.SplitExeAndArgs("\"C:\\Game\\game.exe\"  -arg1 -arg2   ");
+
+        Assert.Equal("\"C:\\Game\\game.exe\"", exe);
+        Assert.Equal("-arg1 -arg2", args);
+    }

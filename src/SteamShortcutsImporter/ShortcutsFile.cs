@@ -148,14 +148,27 @@ public static class ShortcutsFile
         return shortcut;
     }
 
-    private static Dictionary<string, object> ToObject(SteamShortcut sc)
+    internal static Dictionary<string, object> ToObject(SteamShortcut sc)
     {
-        // Ensure exe is quoted for spaces, Steam expects quoted path
+        // Ensure exe is quoted for spaces — Steam expects quoted path.
+        // Defend against the exe field containing a quoted path with trailing arguments
+        // (shouldn't happen after SplitExeAndArgs, but this guard handles it).
         var exeOut = sc.Exe ?? string.Empty;
         if (!string.IsNullOrWhiteSpace(exeOut))
         {
-            // if not already quoted, and contains space or colon+backslash pattern, quote it
-            if (!(exeOut.Length >= 2 && exeOut[0] == '"' && exeOut[exeOut.Length - 1] == '"'))
+            var alreadyQuoted = exeOut.Length >= 2 && exeOut[0] == '"' && exeOut[exeOut.Length - 1] == '"';
+            if (!alreadyQuoted && exeOut[0] == '"')
+            {
+                // String starts with " but doesn't end with " — it has trailing content.
+                // Extract only the quoted exe portion (the rest belongs in LaunchOptions).
+                var closeIdx = exeOut.IndexOf('"', 1);
+                if (closeIdx > 0)
+                {
+                    exeOut = exeOut.Substring(0, closeIdx + 1);
+                    alreadyQuoted = true;
+                }
+            }
+            if (!alreadyQuoted)
             {
                 exeOut = "\"" + exeOut + "\"";
             }

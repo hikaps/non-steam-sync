@@ -1046,17 +1046,22 @@ internal class ImportExportService
             }
         }
 
-        var appId = resolvedExistingAppId != 0 ? resolvedExistingAppId : Utils.GenerateShortcutAppId(exePath, name);
+        // Split quoted exe path from trailing arguments (e.g. '"C:\Game\game.exe" -arg').
+        // The arguments belong in LaunchOptions, not bundled in Exe — otherwise
+        // the VDF quoting logic in ToObject double-quotes the string, breaking the path.
+        var (actualExe, extraArgs) = Utils.SplitExeAndArgs(exePath);
+
+        var appId = resolvedExistingAppId != 0 ? resolvedExistingAppId : Utils.GenerateShortcutAppId(actualExe, name);
         if (!existing.TryGetValue(appId, out var sc))
         {
-            sc = new SteamShortcut { AppName = name, Exe = exePath, StartDir = workDir ?? string.Empty, AppId = appId };
+            sc = new SteamShortcut { AppName = name, Exe = actualExe, StartDir = workDir ?? string.Empty, AppId = appId };
             shortcuts.Add(sc);
             added++;
         }
         else
         {
             sc.AppName = name;
-            sc.Exe = exePath;
+            sc.Exe = actualExe;
             sc.StartDir = workDir ?? sc.StartDir;
             updated++;
         }
@@ -1068,7 +1073,10 @@ internal class ImportExportService
         else if (action.Type == GameActionType.File)
         {
             var expandedArgs = _pathResolver.ExpandPathVariables(g, action.Arguments) ?? string.Empty;
-            sc.LaunchOptions = EmulatorPathUtils.QuoteArgumentsIfNeeded(expandedArgs);
+            var combined = string.IsNullOrEmpty(extraArgs) ? expandedArgs
+                : string.IsNullOrEmpty(expandedArgs) ? extraArgs
+                : extraArgs + " " + expandedArgs;
+            sc.LaunchOptions = EmulatorPathUtils.QuoteArgumentsIfNeeded(combined);
         }
 
         try
