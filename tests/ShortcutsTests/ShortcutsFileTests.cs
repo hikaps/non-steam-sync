@@ -12,7 +12,7 @@ public class ShortcutsFileTests
 
         var obj = ShortcutsFile.ToObject(sc);
 
-        Assert.Equal("\"C:\\Game\\game.exe\"", obj["Exe"]);
+        Assert.Equal("\"C:\\Game\\game.exe\"", obj["exe"]);
     }
 
     [Fact]
@@ -22,7 +22,7 @@ public class ShortcutsFileTests
 
         var obj = ShortcutsFile.ToObject(sc);
 
-        Assert.Equal("\"C:\\Game\\game.exe\"", obj["Exe"]);
+        Assert.Equal("\"C:\\Game\\game.exe\"", obj["exe"]);
     }
 
     [Fact]
@@ -39,7 +39,7 @@ public class ShortcutsFileTests
         var obj = ShortcutsFile.ToObject(sc);
 
         // Should NOT be double-quoted to: ""D:\Games\..." -args"
-        Assert.Equal("\"D:\\Games\\Portal Prelude\\hl2.exe\"", obj["Exe"]);
+        Assert.Equal("\"D:\\Games\\Portal Prelude\\hl2.exe\"", obj["exe"]);
     }
 
     [Fact]
@@ -50,7 +50,7 @@ public class ShortcutsFileTests
 
         var obj = ShortcutsFile.ToObject(sc);
 
-        Assert.Equal("\"\"broken\"", obj["Exe"]);
+        Assert.Equal("\"\"broken\"", obj["exe"]);
     }
 
     [Fact]
@@ -60,7 +60,7 @@ public class ShortcutsFileTests
 
         var obj = ShortcutsFile.ToObject(sc);
 
-        Assert.Equal("", obj["Exe"]);
+        Assert.Equal("", obj["exe"]);
     }
 
     [Fact]
@@ -70,6 +70,6 @@ public class ShortcutsFileTests
 
         var obj = ShortcutsFile.ToObject(sc);
 
-        Assert.Equal("", obj["Exe"]);
+        Assert.Equal("", obj["exe"]);
     }
 }
