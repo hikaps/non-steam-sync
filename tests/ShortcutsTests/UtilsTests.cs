@@ -296,7 +296,6 @@ public class UtilsTests
         // "\"path\"" -> "path" (outer quotes removed)
         Assert.Equal("\"path\"", Utils.NormalizePath("\"\"path\"\""));
     }
-}
 
     // SplitExeAndArgs tests
 
@@ -364,3 +363,4 @@ public class UtilsTests
         Assert.Equal("\"C:\\Game\\game.exe\"", exe);
         Assert.Equal("-arg1 -arg2", args);
     }
+}
