@@ -154,15 +154,19 @@ internal class WriteBackHandler : IDisposable
                   ?? game.GameActions?.FirstOrDefault();
         if (act != null && act.Type == GameActionType.File)
         {
-            var exe = _pathResolver.ExpandPathVariables(game, act.Path) ?? sc.Exe;
-            var args = _pathResolver.ExpandPathVariables(game, act.Arguments) ?? sc.LaunchOptions;
+            var rawExe = _pathResolver.ExpandPathVariables(game, act.Path) ?? sc.Exe;
+            var rawArgs = _pathResolver.ExpandPathVariables(game, act.Arguments) ?? sc.LaunchOptions;
+            var (exe, extraArgs) = Utils.SplitExeAndArgs(rawExe);
             var dir = _pathResolver.ExpandPathVariables(game, act.WorkingDir);
             if (string.IsNullOrWhiteSpace(dir))
             {
                 try { dir = Path.GetDirectoryName(exe) ?? sc.StartDir; } catch (Exception ex) { _logger.Warn(ex, "Failed to get directory name."); dir = sc.StartDir; }
             }
             sc.Exe = exe;
-            sc.LaunchOptions = EmulatorPathUtils.QuoteArgumentsIfNeeded(args);
+            var combinedArgs = string.IsNullOrEmpty(extraArgs) ? rawArgs
+                : string.IsNullOrEmpty(rawArgs) ? extraArgs
+                : extraArgs + " " + rawArgs;
+            sc.LaunchOptions = EmulatorPathUtils.QuoteArgumentsIfNeeded(combinedArgs);
             sc.StartDir = dir ?? sc.StartDir;
         }
 

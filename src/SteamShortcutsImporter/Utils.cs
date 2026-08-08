@@ -89,6 +89,34 @@ internal static class Utils
         return trimmed;
     }
 
+    /// <summary>
+    /// Splits a command line that has a quoted exe path followed by arguments.
+    /// Returns (quotedExe, extraArgs) where quotedExe is the quoted portion
+    /// and extraArgs is everything after the closing quote (trimmed).
+    /// If the path does not start with a quote, returns the full path unchanged.
+    /// </summary>
+    internal static (string exe, string extraArgs) SplitExeAndArgs(string fullPath)
+    {
+        if (string.IsNullOrWhiteSpace(fullPath))
+        {
+            return (string.Empty, string.Empty);
+        }
+
+        var trimmed = fullPath.Trim();
+        if (trimmed.Length > 0 && trimmed[0] == '"')
+        {
+            var closeIdx = trimmed.IndexOf('"', 1);
+            if (closeIdx > 0)
+            {
+                var exe = trimmed.Substring(0, closeIdx + 1);
+                var extraArgs = trimmed.Substring(closeIdx + 1).Trim();
+                return (exe, extraArgs);
+            }
+        }
+
+        return (trimmed, string.Empty);
+    }
+
     public static string HashString(string input)
     {
         unchecked
