@@ -451,4 +451,18 @@ public class SteamActionUtilitiesTests
         Assert.Single(updated);
         Assert.True(file.IsPlayAction);
     }
+
+    [Fact]
+    public void RemoveSteamLaunchAction_PromotesFirstFileActionWhenNoDirectAction()
+    {
+        var url = $"{Constants.SteamRungameIdUrl}123";
+        var other = new GameAction { Name = "Other", Type = GameActionType.File, Path = "o.exe" };
+        var steam = new GameAction { Name = Constants.PlaySteamActionName, Type = GameActionType.URL, Path = url, IsPlayAction = true };
+
+        var changed = GameActionUtilities.RemoveSteamLaunchAction(new List<GameAction> { other, steam }, url, out var updated);
+
+        Assert.True(changed);
+        Assert.Single(updated);
+        Assert.True(other.IsPlayAction);
+    }
 }

@@ -522,6 +522,7 @@ internal class ImportExportService
             var gridDir = _artworkManager.TryGetGridDirFromVdf(vdfPath!);
 
             // Removal
+            var pendingCleanup = new List<(string Key, uint AppId, Game? Game)>();
             var removeKeys = FindExportKeysToRemove(settings.ExportMap, settings.AutoSyncManagedAppIds, id => db.Games.Get(id), _library.Id);
             foreach (var key in removeKeys)
             {
@@ -534,8 +535,7 @@ internal class ImportExportService
                 {
                     result.Removed++;
                 }
-
-                ArtworkManager.DeleteGridArtwork(gridDir, removedAppId);
+                existing.Remove(removedAppId);
 
                 Game? game = null;
                 if (Guid.TryParse(settings.ExportMap[key], out var gameId))
@@ -543,18 +543,7 @@ internal class ImportExportService
                     game = db.Games.Get(gameId);
                 }
 
-                settings.ExportMap.Remove(key);
-                settings.AutoSyncManagedAppIds.Remove(key);
-
-                if (game != null)
-                {
-                    var url = $"{Constants.SteamRungameIdUrl}{Utils.ToShortcutGameId(removedAppId)}";
-                    if (GameActionUtilities.RemoveSteamLaunchAction(game.GameActions, url, out var updatedActions))
-                    {
-                        game.GameActions = new ObservableCollection<GameAction>(updatedActions);
-                        db.Games.Update(game);
-                    }
-                }
+                pendingCleanup.Add((key, removedAppId, game));
             }
 
             // Export
@@ -579,6 +568,25 @@ internal class ImportExportService
             if (changed)
             {
                 WriteShortcutsWithBackup(vdfPath!, shortcuts);
+            }
+
+            // Only drop artwork, mappings and the Steam play action once the vdf no longer lists the shortcuts,
+            // so a failed write leaves them intact for the next run.
+            foreach (var (key, removedAppId, game) in pendingCleanup)
+            {
+                ArtworkManager.DeleteGridArtwork(gridDir, removedAppId);
+                settings.ExportMap.Remove(key);
+                settings.AutoSyncManagedAppIds.Remove(key);
+
+                if (game != null)
+                {
+                    var url = $"{Constants.SteamRungameIdUrl}{Utils.ToShortcutGameId(removedAppId)}";
+                    if (GameActionUtilities.RemoveSteamLaunchAction(game.GameActions, url, out var updatedActions))
+                    {
+                        game.GameActions = new ObservableCollection<GameAction>(updatedActions);
+                        db.Games.Update(game);
+                    }
+                }
             }
 
             var currentSkips = result.SkippedGameIds.Select(id => id.ToString()).ToList();

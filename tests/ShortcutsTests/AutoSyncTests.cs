@@ -108,7 +108,7 @@ public class AutoSyncTests
         Directory.CreateDirectory(dir);
         try
         {
-            foreach (var f in new[] { "123.png", "123p.jpg", "123_hero.png", "1234.png", "123_other.png" })
+            foreach (var f in new[] { "123.png", "123p.jpg", "123_hero.png", "123_icon.png", "123_logo.png", "1234.png", "123_other.png" })
             {
                 File.WriteAllText(Path.Combine(dir, f), "x");
             }

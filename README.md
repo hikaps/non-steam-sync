@@ -53,7 +53,7 @@ I love Playnite as a clean, flexible launcher, but Steam offers the best control
    - ⚠ **Warning** — folder exists but no userdata found
    - ✗ **Invalid** — folder doesn't exist
 4. Optional: Enable **"Launch via Steam"** to use Steam URLs as the default play action
-5. Optional: Enable **"Automatically sync installed games to Steam"**. On Playnite startup and whenever a game is installed or uninstalled, the plugin adds shortcuts for installed games and removes shortcuts for uninstalled or deleted ones. It never shows dialogs: games needing a manual executable choice or a merge with an existing shortcut are skipped and reported in a notification (click it to open the sync dialog). If Steam is running it is left open — restart Steam to see changes.
+5. Optional: Enable **"Automatically sync installed games to Steam"**. On Playnite startup and whenever a game is installed or uninstalled, the plugin adds shortcuts for installed games and removes shortcuts for games that were deleted from Playnite or uninstalled after auto-sync saw them installed (shortcuts you exported by hand for never-installed games are kept). It never shows dialogs: games needing a manual executable choice or a merge with an existing shortcut are skipped and reported in a notification (click it to open the sync dialog). If Steam is running it is left open — restart Steam to see changes.
 
 ## Usage
 
