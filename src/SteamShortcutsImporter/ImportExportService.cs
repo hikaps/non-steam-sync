@@ -396,13 +396,6 @@ internal class ImportExportService
                 exists = existingById.ContainsKey(computed);
             }
 
-            // Name-based fallback: a manually-created Steam shortcut with the same name is a
-            // merge candidate at export time, so tag it as already in Steam.
-            if (!exists && !string.IsNullOrEmpty(name))
-            {
-                exists = FindNameMatches(name, existingById, byPlayniteId).Count > 0;
-            }
-
             var displayAction = primaryAction ?? fileAction;
             var target = displayAction != null
                 ? (displayAction.Type == GameActionType.File
