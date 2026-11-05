@@ -1,4 +1,5 @@
 using Playnite.SDK;
+using Playnite.SDK.Events;
 using Playnite.SDK.Models;
 using Playnite.SDK.Plugins;
 
@@ -46,6 +47,31 @@ public class ShortcutsLibrary : LibraryPlugin
         _writeBackHandler?.Dispose();
         base.Dispose();
     }
+
+    public override void OnApplicationStarted(OnApplicationStartedEventArgs args) => QueueAutoSync();
+
+    public override void OnGameInstalled(OnGameInstalledEventArgs args) => QueueAutoSync();
+
+    public override void OnGameUninstalled(OnGameUninstalledEventArgs args) => QueueAutoSync();
+
+    /// <summary>
+    /// Runs a full auto-sync reconcile on the UI thread (no-op when the setting is off).
+    /// </summary>
+    internal void QueueAutoSync()
+    {
+        if (!Settings.AutoSyncEnabled) return;
+
+        var dispatcher = PlayniteApi.MainView?.UIDispatcher;
+        if (dispatcher == null)
+        {
+            _importExportService.RunAutoSync();
+            return;
+        }
+
+        dispatcher.BeginInvoke(new Action(_importExportService.RunAutoSync));
+    }
+
+    public static void QueueAutoSyncFromSettings() => Instance?.QueueAutoSync();
 
     public override Guid Id => pluginId;
 

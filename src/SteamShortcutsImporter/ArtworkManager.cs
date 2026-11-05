@@ -70,6 +70,29 @@ internal class ArtworkManager
     }
 
     /// <summary>
+    /// Deletes the grid files this plugin writes for a shortcut (see <see cref="GetExportTargets"/>).
+    /// Other AppIds sharing a numeric prefix are untouched.
+    /// </summary>
+    internal static void DeleteGridArtwork(string? gridDir, uint appId)
+    {
+        if (string.IsNullOrEmpty(gridDir) || !Directory.Exists(gridDir)) return;
+
+        var bases = new[] { appId.ToString(), appId + "p", appId + "_icon", appId + "_logo", appId + "_hero" };
+        foreach (var targetBase in bases)
+        {
+            string[] files;
+            try { files = Directory.GetFiles(gridDir, targetBase + ".*", SearchOption.TopDirectoryOnly); }
+            catch (Exception ex) { Logger.Warn(ex, $"Failed to enumerate grid artwork for '{targetBase}'."); continue; }
+
+            foreach (var file in files)
+            {
+                try { File.Delete(file); }
+                catch (Exception ex) { Logger.Warn(ex, $"Failed to delete grid artwork '{file}'."); }
+            }
+        }
+    }
+
+    /// <summary>
     /// Maps a Playnite game's artwork fields to the Steam grid filename bases (no extension)
     /// they should be copied to. Playnite has no logo field, so the game icon is reused as the
     /// closest emblem-shaped proxy for Steam's logo slot.
