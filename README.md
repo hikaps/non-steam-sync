@@ -16,6 +16,7 @@ I love Playnite as a clean, flexible launcher, but Steam offers the best control
 - **Artwork support** — covers, icons, and backgrounds sync between Playnite and Steam; logos are exported to Steam
 - **Launch via Steam** — use `steam://rungameid/...` URLs for full controller and overlay support
 - **Automatic write-back** — edits in Playnite sync back to Steam (name, artwork, play actions)
+- **Auto-sync** (opt-in) — keeps Steam shortcuts in step with your installed Playnite games
 - **Backup & restore** — automatic backups before changes, with easy restore from settings
 - **Multi-user support** — works with multiple Steam profiles on the same machine
 
@@ -52,6 +53,7 @@ I love Playnite as a clean, flexible launcher, but Steam offers the best control
    - ⚠ **Warning** — folder exists but no userdata found
    - ✗ **Invalid** — folder doesn't exist
 4. Optional: Enable **"Launch via Steam"** to use Steam URLs as the default play action
+5. Optional: Enable **"Automatically sync installed games to Steam"**. On Playnite startup and whenever a game is installed or uninstalled, the plugin adds shortcuts for installed games and removes shortcuts for games that were deleted from Playnite or uninstalled after auto-sync saw them installed (shortcuts you exported by hand for never-installed games are kept). It never shows dialogs: games needing a manual executable choice or a merge with an existing shortcut are skipped and reported in a notification (click it to open the sync dialog). If Steam is running it is left open — restart Steam to see changes.
 
 ## Usage
 

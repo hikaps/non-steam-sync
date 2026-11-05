@@ -107,6 +107,12 @@ internal static class Constants
     public const string SkipReasonNoInstallDir = "No install directory";
     public const string SkipReasonUserSkipped = "Skipped by user";
     public const string SkipReasonEmulator = "Emulator-based games not supported";
+    public const string SkipReasonNameMatch = "Matches an existing Steam shortcut; export it manually to merge";
+    public const string SteamLibraryPluginId = "cb91dfc9-b977-43bf-8e70-55f46e410fab";
+    public const string AutoSyncRestartNotificationId = "SteamShortcuts_AutoSync_Restart";
+    public const string AutoSyncSkippedNotificationId = "SteamShortcuts_AutoSync_Skipped";
+    public const string AutoSyncRestartMessage = "Steam Shortcuts auto-sync: {0} added, {1} removed. Restart Steam to see the changes.";
+    public const string AutoSyncSkippedMessage = "Steam Shortcuts auto-sync skipped {0} game(s) that need attention. Click to review them.";
 
     // Selection dialog indicators
     public const string ExeNotSetIndicator = "(executable not set - will prompt)";

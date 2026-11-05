@@ -119,6 +119,16 @@ public class PluginSettingsView : UserControl
             new System.Windows.Data.Binding("SteamActionIsDefault") { Mode = System.Windows.Data.BindingMode.TwoWay });
         panel.Children.Add(_steamDefaultCheckBox);
 
+        // Auto-sync checkbox
+        var autoSyncCheck = new CheckBox
+        {
+            Content = "Automatically sync installed games to Steam (on startup and when games are installed or uninstalled)",
+            Margin = new Thickness(0, 12, 0, 0)
+        };
+        autoSyncCheck.SetBinding(System.Windows.Controls.Primitives.ToggleButton.IsCheckedProperty,
+            new System.Windows.Data.Binding("AutoSyncEnabled") { Mode = System.Windows.Data.BindingMode.TwoWay });
+        panel.Children.Add(autoSyncCheck);
+
         // Set initial enabled state for default checkbox
         Loaded += InitializeDefaultCheckBoxState;
 

@@ -1,5 +1,6 @@
 
 using Playnite.SDK;
+using Playnite.SDK.Events;
 using Playnite.SDK.Models;
 using Playnite.SDK.Plugins;
 
@@ -27,4 +28,10 @@ public class Plugin : LibraryPlugin
     public override System.Collections.Generic.IEnumerable<GameMenuItem> GetGameMenuItems(GetGameMenuItemsArgs args) => Implementation.GetGameMenuItems(args);
 
     public override System.Collections.Generic.IEnumerable<GameMetadata> GetGames(LibraryGetGamesArgs args) => Implementation.GetGames(args);
+
+    public override void OnApplicationStarted(OnApplicationStartedEventArgs args) => Implementation.OnApplicationStarted(args);
+
+    public override void OnGameInstalled(OnGameInstalledEventArgs args) => Implementation.OnGameInstalled(args);
+
+    public override void OnGameUninstalled(OnGameUninstalledEventArgs args) => Implementation.OnGameUninstalled(args);
 }

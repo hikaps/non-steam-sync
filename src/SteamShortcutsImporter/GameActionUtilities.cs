@@ -9,6 +9,38 @@ namespace SteamShortcutsImporter;
 
 internal static class GameActionUtilities
 {
+    /// <summary>
+    /// Removes Steam rungameid URL actions matching <paramref name="expectedUrl"/>. If the removed action
+    /// was the only play action, promotes the "Play (Direct)" File action (or the first File action).
+    /// </summary>
+    public static bool RemoveSteamLaunchAction(IList<GameAction>? existingActions, string expectedUrl, out List<GameAction> updatedActions)
+    {
+        updatedActions = existingActions != null ? new List<GameAction>(existingActions) : new List<GameAction>();
+
+        var removed = updatedActions
+            .Where(a => a.Type == GameActionType.URL && string.Equals(a.Path, expectedUrl, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        if (removed.Count == 0)
+        {
+            return false;
+        }
+
+        var removedPlay = removed.Any(a => a.IsPlayAction);
+        updatedActions.RemoveAll(a => removed.Contains(a));
+
+        if (removedPlay && !updatedActions.Any(a => a.IsPlayAction))
+        {
+            var fileActions = updatedActions.Where(a => a.Type == GameActionType.File).ToList();
+            var promote = fileActions.FirstOrDefault(a => a.Name == Constants.PlayDirectActionName) ?? fileActions.FirstOrDefault();
+            if (promote != null)
+            {
+                promote.IsPlayAction = true;
+            }
+        }
+
+        return true;
+    }
+
     public static bool EnsureSteamLaunchAction(IList<GameAction>? existingActions, string expectedUrl, string? trackingPath, bool steamActionIsDefault, out List<GameAction> updatedActions, out GameAction steamAction)
     {
         var actions = existingActions != null ? new List<GameAction>(existingActions) : new List<GameAction>();
