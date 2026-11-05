@@ -15,6 +15,8 @@ public class PluginSettingsView : UserControl
     private TextBox? _pathBox;
     private TextBlock? _validationText;
     private TextBlock? _validationInfo;
+    private CheckBox? _launchCheck;
+    private CheckBox? _steamDefaultCheckBox;
     private ComboBox? _userComboBox;
     private string? _currentSteamRootPath;
     private bool _isRefreshingUsers;
@@ -95,14 +97,30 @@ public class PluginSettingsView : UserControl
         panel.Children.Add(_validationInfo);
 
         // Launch via Steam checkbox
-        var launchCheck = new CheckBox
+        _launchCheck = new CheckBox
         {
             Content = "Launch via Steam (rungameid) when possible",
             Margin = new Thickness(0, 12, 0, 0)
         };
-        launchCheck.SetBinding(System.Windows.Controls.Primitives.ToggleButton.IsCheckedProperty,
+        _launchCheck.SetBinding(System.Windows.Controls.Primitives.ToggleButton.IsCheckedProperty,
             new System.Windows.Data.Binding("LaunchViaSteam") { Mode = System.Windows.Data.BindingMode.TwoWay });
-        panel.Children.Add(launchCheck);
+        _launchCheck.Checked += LaunchCheck_IsEnabledChanged;
+        _launchCheck.Unchecked += LaunchCheck_IsEnabledChanged;
+        panel.Children.Add(_launchCheck);
+
+        // Steam default action checkbox (indented under Launch via Steam)
+        _steamDefaultCheckBox = new CheckBox
+        {
+            Content = "Make Steam action the default play action",
+            Margin = new Thickness(24, 4, 0, 0),
+            IsEnabled = false
+        };
+        _steamDefaultCheckBox.SetBinding(System.Windows.Controls.Primitives.ToggleButton.IsCheckedProperty,
+            new System.Windows.Data.Binding("SteamActionIsDefault") { Mode = System.Windows.Data.BindingMode.TwoWay });
+        panel.Children.Add(_steamDefaultCheckBox);
+
+        // Set initial enabled state for default checkbox
+        Loaded += InitializeDefaultCheckBoxState;
 
         // Steam user selection
         panel.Children.Add(new TextBlock
@@ -481,6 +499,22 @@ public class PluginSettingsView : UserControl
         if (settings != null)
         {
             settings.SelectedSteamUserId = selectedItem?.Tag as string;
+        }
+    }
+
+    private void LaunchCheck_IsEnabledChanged(object sender, RoutedEventArgs e)
+    {
+        if (_steamDefaultCheckBox != null && _launchCheck != null)
+        {
+            _steamDefaultCheckBox.IsEnabled = _launchCheck.IsChecked == true;
+        }
+    }
+
+    private void InitializeDefaultCheckBoxState(object sender, RoutedEventArgs e)
+    {
+        if (_steamDefaultCheckBox != null && _launchCheck != null)
+        {
+            _steamDefaultCheckBox.IsEnabled = _launchCheck.IsChecked == true;
         }
     }
 }

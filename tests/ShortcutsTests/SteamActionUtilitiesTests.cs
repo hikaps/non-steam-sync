@@ -20,7 +20,7 @@ public class SteamActionUtilitiesTests
 
         var expectedUrl = $"{Constants.SteamRungameIdUrl}123456";
         var trackingPath = @"C:\Games";
-        var changed = GameActionUtilities.EnsureSteamLaunchAction(new List<GameAction> { fileAction }, expectedUrl, trackingPath, out var updated, out var steamAction);
+        var changed = GameActionUtilities.EnsureSteamLaunchAction(new List<GameAction> { fileAction }, expectedUrl, trackingPath, steamActionIsDefault: true, out var updated, out var steamAction);
 
         Assert.True(changed);
         Assert.Equal(Constants.PlaySteamActionName, steamAction.Name);
@@ -49,7 +49,7 @@ public class SteamActionUtilitiesTests
         var trackingPath = @"C:\Games";
         var otherAction = new GameAction { Name = "Custom", Type = GameActionType.File, Path = "custom.exe", IsPlayAction = true };
 
-        var changed = GameActionUtilities.EnsureSteamLaunchAction(new List<GameAction> { otherAction, existingSteam }, expectedUrl, trackingPath, out var updated, out var steamAction);
+        var changed = GameActionUtilities.EnsureSteamLaunchAction(new List<GameAction> { otherAction, existingSteam }, expectedUrl, trackingPath, steamActionIsDefault: true, out var updated, out var steamAction);
 
         Assert.True(changed);
         Assert.Same(existingSteam, steamAction);
@@ -70,7 +70,7 @@ public class SteamActionUtilitiesTests
         var steamB = new GameAction { Name = "Play (Steam)", Type = GameActionType.URL, Path = expectedUrl, IsPlayAction = false };
         var other = new GameAction { Name = "Something Else", Type = GameActionType.File, Path = "run.exe" };
 
-        var changed = GameActionUtilities.EnsureSteamLaunchAction(new List<GameAction> { steamA, steamB, other }, expectedUrl, trackingPath, out var updated, out var steamAction);
+        var changed = GameActionUtilities.EnsureSteamLaunchAction(new List<GameAction> { steamA, steamB, other }, expectedUrl, trackingPath, steamActionIsDefault: true, out var updated, out var steamAction);
 
         Assert.True(changed);
         Assert.Single(updated.Where(a => a.Type == GameActionType.URL && a.Path == expectedUrl));
@@ -91,7 +91,7 @@ public class SteamActionUtilitiesTests
             IsPlayAction = false
         };
 
-        var changed = GameActionUtilities.EnsureSteamLaunchAction(new List<GameAction> { otherSteam }, expectedUrl, trackingPath, out var updated, out var steamAction);
+        var changed = GameActionUtilities.EnsureSteamLaunchAction(new List<GameAction> { otherSteam }, expectedUrl, trackingPath, steamActionIsDefault: true, out var updated, out var steamAction);
 
         Assert.True(changed);
         Assert.Equal(2, updated.Count);
@@ -116,7 +116,7 @@ public class SteamActionUtilitiesTests
 
         var expectedUrl = $"{Constants.SteamRungameIdUrl}555666";
         var trackingPath = @"C:\Tracking";
-        var changed = GameActionUtilities.EnsureSteamLaunchAction(new List<GameAction> { fileAction }, expectedUrl, trackingPath, out var updated, out var steamAction);
+        var changed = GameActionUtilities.EnsureSteamLaunchAction(new List<GameAction> { fileAction }, expectedUrl, trackingPath, steamActionIsDefault: true, out var updated, out var steamAction);
 
         Assert.True(changed);
         Assert.Equal(2, updated.Count);
@@ -141,7 +141,7 @@ public class SteamActionUtilitiesTests
 
         var expectedUrl = $"{Constants.SteamRungameIdUrl}777888";
         var trackingPath = @"C:\Games";
-        var changed = GameActionUtilities.EnsureSteamLaunchAction(new List<GameAction> { fileAction, urlAction, customAction }, expectedUrl, trackingPath, out var updated, out var steamAction);
+        var changed = GameActionUtilities.EnsureSteamLaunchAction(new List<GameAction> { fileAction, urlAction, customAction }, expectedUrl, trackingPath, steamActionIsDefault: true, out var updated, out var steamAction);
 
         Assert.True(changed);
         Assert.Equal(4, updated.Count);
@@ -157,7 +157,7 @@ public class SteamActionUtilitiesTests
         var expectedUrl = $"{Constants.SteamRungameIdUrl}111222";
         var trackingPath = @"C:\Games";
 
-        var changed = GameActionUtilities.EnsureSteamLaunchAction(null, expectedUrl, trackingPath, out var updated, out var steamAction);
+        var changed = GameActionUtilities.EnsureSteamLaunchAction(null, expectedUrl, trackingPath, steamActionIsDefault: true, out var updated, out var steamAction);
 
         Assert.True(changed);
         Assert.Single(updated);
@@ -170,7 +170,7 @@ public class SteamActionUtilitiesTests
         var expectedUrl = $"{Constants.SteamRungameIdUrl}333444";
         var trackingPath = @"C:\Games";
 
-        var changed = GameActionUtilities.EnsureSteamLaunchAction(new List<GameAction>(), expectedUrl, trackingPath, out var updated, out var steamAction);
+        var changed = GameActionUtilities.EnsureSteamLaunchAction(new List<GameAction>(), expectedUrl, trackingPath, steamActionIsDefault: true, out var updated, out var steamAction);
 
         Assert.True(changed);
         Assert.Single(updated);
@@ -191,7 +191,7 @@ public class SteamActionUtilitiesTests
         };
 
         var trackingPath = @"C:\New";
-        var changed = GameActionUtilities.EnsureSteamLaunchAction(new List<GameAction> { existingSteam }, existingSteam.Path, trackingPath, out var updated, out var steamAction);
+        var changed = GameActionUtilities.EnsureSteamLaunchAction(new List<GameAction> { existingSteam }, existingSteam.Path, trackingPath, steamActionIsDefault: true, out var updated, out var steamAction);
 
         Assert.True(changed);
         Assert.Same(existingSteam, steamAction);
@@ -216,7 +216,7 @@ public class SteamActionUtilitiesTests
 
         var expectedUrl = $"{Constants.SteamRungameIdUrl}444555";
         var trackingPath = @"C:\Tracking";
-        var changed = GameActionUtilities.EnsureSteamLaunchAction(new List<GameAction> { action }, expectedUrl, trackingPath, out var updated, out var steamAction);
+        var changed = GameActionUtilities.EnsureSteamLaunchAction(new List<GameAction> { action }, expectedUrl, trackingPath, steamActionIsDefault: true, out var updated, out var steamAction);
 
         Assert.True(changed);
         Assert.Same(action, updated[1]);
@@ -229,5 +229,186 @@ public class SteamActionUtilitiesTests
         Assert.Equal(@"C:\Games\primary.exe", action.TrackingPath);
         Assert.False(action.IsPlayAction);
         Assert.Same(steamAction, updated[0]);
+    }
+
+    [Fact]
+    public void SteamActionNotDefault_KeepsFileActionAsDefault()
+    {
+        var fileAction = new GameAction
+        {
+            Name = "Play",
+            Type = GameActionType.File,
+            Path = "game.exe",
+            IsPlayAction = true
+        };
+
+        var expectedUrl = $"{Constants.SteamRungameIdUrl}123456";
+        var trackingPath = @"C:\Games";
+        var changed = GameActionUtilities.EnsureSteamLaunchAction(
+            new List<GameAction> { fileAction }, expectedUrl, trackingPath, false, out var updated, out var steamAction);
+
+        Assert.True(changed);
+        Assert.Equal(Constants.PlaySteamActionName, steamAction.Name);
+        Assert.False(steamAction.IsPlayAction);
+        Assert.True(fileAction.IsPlayAction);
+        Assert.Equal(2, updated.Count);
+        Assert.Same(steamAction, updated[0]);
+    }
+
+    [Fact]
+    public void SteamActionNotDefault_WhenNoExistingDefault_MakesSteamDefault()
+    {
+        var otherAction = new GameAction
+        {
+            Name = "Info",
+            Type = GameActionType.URL,
+            Path = "https://example.com",
+            IsPlayAction = false
+        };
+
+        var expectedUrl = $"{Constants.SteamRungameIdUrl}789012";
+        var trackingPath = @"C:\Games";
+        var changed = GameActionUtilities.EnsureSteamLaunchAction(
+            new List<GameAction> { otherAction }, expectedUrl, trackingPath, false, out var updated, out var steamAction);
+
+        Assert.True(changed);
+        Assert.True(steamAction.IsPlayAction);
+        Assert.False(otherAction.IsPlayAction);
+    }
+
+    [Fact]
+    public void SteamActionNotDefault_PreservesExistingDefault()
+    {
+        var actionA = new GameAction
+        {
+            Name = "Primary",
+            Type = GameActionType.File,
+            Path = "game.exe",
+            IsPlayAction = true
+        };
+        var actionB = new GameAction
+        {
+            Name = "Website",
+            Type = GameActionType.URL,
+            Path = "https://example.com",
+            IsPlayAction = false
+        };
+
+        var expectedUrl = $"{Constants.SteamRungameIdUrl}345678";
+        var trackingPath = @"C:\Games";
+        var changed = GameActionUtilities.EnsureSteamLaunchAction(
+            new List<GameAction> { actionA, actionB }, expectedUrl, trackingPath, false, out var updated, out var steamAction);
+
+        Assert.True(changed);
+        Assert.True(actionA.IsPlayAction);
+        Assert.False(actionB.IsPlayAction);
+        Assert.False(steamAction.IsPlayAction);
+    }
+
+    [Fact]
+    public void SteamActionIsDefault_True_BehavesSameAsBefore()
+    {
+        var fileAction = new GameAction
+        {
+            Name = "Play",
+            Type = GameActionType.File,
+            Path = "game.exe",
+            IsPlayAction = true
+        };
+
+        var expectedUrl = $"{Constants.SteamRungameIdUrl}555666";
+        var trackingPath = @"C:\Tracking";
+        var changed = GameActionUtilities.EnsureSteamLaunchAction(
+            new List<GameAction> { fileAction }, expectedUrl, trackingPath, true, out var updated, out var steamAction);
+
+        Assert.True(changed);
+        Assert.Equal(2, updated.Count);
+        Assert.Same(steamAction, updated[0]);
+        Assert.Same(fileAction, updated[1]);
+        Assert.True(steamAction.IsPlayAction);
+        Assert.False(fileAction.IsPlayAction);
+        Assert.Equal(Constants.PlaySteamActionName, steamAction.Name);
+        Assert.Equal(GameActionType.URL, steamAction.Type);
+        Assert.Equal(expectedUrl, steamAction.Path);
+    }
+
+    [Fact]
+    public void SteamActionNotDefault_DemotesSteamAndPromotesFile()
+    {
+        // State every game imported under the old default-on setting is in.
+        var steamAction = new GameAction
+        {
+            Name = Constants.PlaySteamActionName,
+            Type = GameActionType.URL,
+            Path = $"{Constants.SteamRungameIdUrl}654321",
+            IsPlayAction = true
+        };
+        var fileAction = new GameAction
+        {
+            Name = Constants.PlayDirectActionName,
+            Type = GameActionType.File,
+            Path = "game.exe",
+            IsPlayAction = false
+        };
+
+        var expectedUrl = steamAction.Path;
+        var trackingPath = @"C:\Games";
+        var changed = GameActionUtilities.EnsureSteamLaunchAction(
+            new List<GameAction> { steamAction, fileAction }, expectedUrl, trackingPath, false, out var updated, out var resultSteam);
+
+        Assert.True(changed);
+        Assert.False(resultSteam.IsPlayAction);
+        Assert.True(fileAction.IsPlayAction);
+        Assert.Single(updated.Where(a => a.IsPlayAction));
+    }
+
+    [Fact]
+    public void SteamActionNotDefault_ResolvesDoubleDefaultToFile()
+    {
+        var steamAction = new GameAction
+        {
+            Name = Constants.PlaySteamActionName,
+            Type = GameActionType.URL,
+            Path = $"{Constants.SteamRungameIdUrl}654322",
+            IsPlayAction = true
+        };
+        var fileAction = new GameAction
+        {
+            Name = Constants.PlayDirectActionName,
+            Type = GameActionType.File,
+            Path = "game.exe",
+            IsPlayAction = true
+        };
+
+        var expectedUrl = steamAction.Path;
+        var trackingPath = @"C:\Games";
+        var changed = GameActionUtilities.EnsureSteamLaunchAction(
+            new List<GameAction> { steamAction, fileAction }, expectedUrl, trackingPath, false, out var updated, out _);
+
+        Assert.True(changed);
+        Assert.False(steamAction.IsPlayAction);
+        Assert.True(fileAction.IsPlayAction);
+        Assert.Single(updated.Where(a => a.IsPlayAction));
+    }
+
+    [Fact]
+    public void SteamActionNotDefault_NoFileAction_KeepsSteamAsDefault()
+    {
+        var steamAction = new GameAction
+        {
+            Name = Constants.PlaySteamActionName,
+            Type = GameActionType.URL,
+            Path = $"{Constants.SteamRungameIdUrl}654323",
+            IsPlayAction = true
+        };
+
+        var expectedUrl = steamAction.Path;
+        var trackingPath = @"C:\Games";
+        var changed = GameActionUtilities.EnsureSteamLaunchAction(
+            new List<GameAction> { steamAction }, expectedUrl, trackingPath, false, out var updated, out _);
+
+        // No File action to promote; Steam stays the default so the game remains launchable.
+        Assert.True(changed);
+        Assert.True(steamAction.IsPlayAction);
     }
 }

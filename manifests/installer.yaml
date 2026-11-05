@@ -1,5 +1,15 @@
 AddonId: f15771cd-b6d7-4a3d-9b8e-08786a13d9c7
 Packages:
+  - Version: 0.8.0
+    RequiredApiVersion: 6.0.0
+    ReleaseDate: 2026-11-05
+    PackageUrl: https://github.com/hikaps/non-steam-sync/releases/download/v0.8.0/SteamShortcutsImporter-v0.8.0.pext
+    Changelog:
+      - Offer to merge onto an existing same-named Steam shortcut on export, preserving its AppId and controller profile
+      - Fix double-quoted exe paths when a path contains embedded arguments
+      - Export logo artwork to the Steam grid
+      - Make the Steam action default toggleable (fixes Installation Status Updater conflict)
+      - Wire up selection dialog buttons, add virtualization and fix theme compatibility
   - Version: 0.7.2
     RequiredApiVersion: 6.0.0
     ReleaseDate: 2026-04-23

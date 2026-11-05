@@ -9,7 +9,7 @@ namespace SteamShortcutsImporter;
 
 internal static class GameActionUtilities
 {
-    public static bool EnsureSteamLaunchAction(IList<GameAction>? existingActions, string expectedUrl, string? trackingPath, out List<GameAction> updatedActions, out GameAction steamAction)
+    public static bool EnsureSteamLaunchAction(IList<GameAction>? existingActions, string expectedUrl, string? trackingPath, bool steamActionIsDefault, out List<GameAction> updatedActions, out GameAction steamAction)
     {
         var actions = existingActions != null ? new List<GameAction>(existingActions) : new List<GameAction>();
         bool changed = false;
@@ -76,20 +76,47 @@ internal static class GameActionUtilities
             changed = true;
         }
 
-        for (int i = 0; i < actions.Count; i++)
+        if (steamActionIsDefault)
         {
-            var act = actions[i];
-            if (!ReferenceEquals(act, steam) && act.IsPlayAction)
+            for (int i = 0; i < actions.Count; i++)
             {
-                act.IsPlayAction = false;
+                var act = actions[i];
+                if (!ReferenceEquals(act, steam) && act.IsPlayAction)
+                {
+                    act.IsPlayAction = false;
+                    changed = true;
+                }
+            }
+
+            if (!steam.IsPlayAction)
+            {
+                steam.IsPlayAction = true;
                 changed = true;
             }
         }
-
-        if (!steam.IsPlayAction)
+        else
         {
-            steam.IsPlayAction = true;
-            changed = true;
+            // Steam is not the intended default. Promote a File action (Play (Direct)) as the
+            // active play action so Playnite's Installation Status Updater can track the install
+            // folder. Fall back to Steam only when no File action exists.
+            var fileDefault = actions.FirstOrDefault(a =>
+                    !ReferenceEquals(a, steam) &&
+                    a.Type == GameActionType.File &&
+                    string.Equals(a.Name, Constants.PlayDirectActionName, StringComparison.Ordinal))
+                ?? actions.FirstOrDefault(a => !ReferenceEquals(a, steam) && a.Type == GameActionType.File);
+
+            var desiredDefault = fileDefault ?? steam;
+
+            for (int i = 0; i < actions.Count; i++)
+            {
+                var act = actions[i];
+                var shouldBeDefault = ReferenceEquals(act, desiredDefault);
+                if (act.IsPlayAction != shouldBeDefault)
+                {
+                    act.IsPlayAction = shouldBeDefault;
+                    changed = true;
+                }
+            }
         }
 
         if (actions.Count == 0 || !ReferenceEquals(actions.First(), steam))

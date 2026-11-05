@@ -1030,6 +1030,81 @@ internal class ImportExportService
 
     
 
+    /// <summary>
+    /// Existing Steam shortcuts whose AppName equals <paramref name="name"/> (case-insensitive)
+    /// and that are not already bound to a Playnite game through the export map.
+    /// </summary>
+    internal static List<KeyValuePair<uint, SteamShortcut>> FindNameMatches(string name, Dictionary<uint, SteamShortcut> existing, Dictionary<string, uint> byPlayniteId)
+    {
+        if (string.IsNullOrEmpty(name))
+        {
+            return new List<KeyValuePair<uint, SteamShortcut>>();
+        }
+
+        var mapped = new HashSet<uint>(byPlayniteId.Values);
+        return existing
+            .Where(kv => !mapped.Contains(kv.Key)
+                && string.Equals(kv.Value.AppName, name, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+    }
+
+    /// <summary>
+    /// Asks the user whether to merge a game onto an unmapped Steam shortcut with the same name,
+    /// preserving its AppId (controller profiles are bound to AppId). Returns 0 for no merge.
+    /// A declined merge creates a new shortcut, which is then recorded in the export map, so
+    /// the question is not asked again for that game.
+    /// </summary>
+    private uint ResolveExistingByName(string name, Dictionary<uint, SteamShortcut> existing, Dictionary<string, uint> byPlayniteId)
+    {
+        try
+        {
+            var matches = FindNameMatches(name, existing, byPlayniteId);
+            if (matches.Count == 0)
+            {
+                return 0;
+            }
+
+            var dialogs = _library.PlayniteApi.Dialogs;
+            if (matches.Count == 1)
+            {
+                var confirm = dialogs.ShowMessage(
+                    $"A Steam shortcut named '{name}' already exists. Merge onto it (preserving AppId and controller profile)?",
+                    _library.Name,
+                    System.Windows.MessageBoxButton.YesNo,
+                    System.Windows.MessageBoxImage.Question);
+                return confirm == System.Windows.MessageBoxResult.Yes ? matches[0].Key : 0u;
+            }
+
+            const string createNew = "Create new entry";
+            var byLabel = new Dictionary<string, uint>();
+            var options = new List<GenericItemOption>();
+            foreach (var kv in matches)
+            {
+                var label = $"{kv.Value.AppName} [{kv.Key}]";
+                byLabel[label] = kv.Key;
+                options.Add(new GenericItemOption(label, "Exe: " + (kv.Value.Exe ?? "(unknown)")));
+            }
+            options.Add(new GenericItemOption(createNew, "Skip merge and create a new shortcut"));
+
+            var chosen = dialogs.ChooseItemWithSearch(
+                options,
+                search => string.IsNullOrEmpty(search)
+                    ? options
+                    : options.Where(o =>
+                        o.Name.IndexOf(search, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        o.Description.IndexOf(search, StringComparison.OrdinalIgnoreCase) >= 0).ToList(),
+                null,
+                $"Select shortcut to merge '{name}' onto");
+
+            return chosen != null && byLabel.TryGetValue(chosen.Name, out var chosenAppId) ? chosenAppId : 0u;
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn(ex, $"Name-based fallback failed for '{name}'.");
+            return 0;
+        }
+    }
+
     private uint CreateOrUpdateShortcut(Game g, string exePath, string? workDir, string name, GameAction action, List<SteamShortcut> shortcuts, Dictionary<uint, SteamShortcut> existing, Dictionary<string, uint> byPlayniteId, ref int added, ref int updated)
     {
         uint resolvedExistingAppId = 0;
@@ -1046,17 +1121,27 @@ internal class ImportExportService
             }
         }
 
-        var appId = resolvedExistingAppId != 0 ? resolvedExistingAppId : Utils.GenerateShortcutAppId(exePath, name);
+        if (resolvedExistingAppId == 0)
+        {
+            resolvedExistingAppId = ResolveExistingByName(name, existing, byPlayniteId);
+        }
+
+        // Split quoted exe path from trailing arguments (e.g. '"C:\Game\game.exe" -arg').
+        // The arguments belong in LaunchOptions, not bundled in Exe — otherwise
+        // the VDF quoting logic in ToObject double-quotes the string, breaking the path.
+        var (actualExe, extraArgs) = Utils.SplitExeAndArgs(exePath);
+
+        var appId = resolvedExistingAppId != 0 ? resolvedExistingAppId : Utils.GenerateShortcutAppId(actualExe, name);
         if (!existing.TryGetValue(appId, out var sc))
         {
-            sc = new SteamShortcut { AppName = name, Exe = exePath, StartDir = workDir ?? string.Empty, AppId = appId };
+            sc = new SteamShortcut { AppName = name, Exe = actualExe, StartDir = workDir ?? string.Empty, AppId = appId };
             shortcuts.Add(sc);
             added++;
         }
         else
         {
             sc.AppName = name;
-            sc.Exe = exePath;
+            sc.Exe = actualExe;
             sc.StartDir = workDir ?? sc.StartDir;
             updated++;
         }
@@ -1068,7 +1153,10 @@ internal class ImportExportService
         else if (action.Type == GameActionType.File)
         {
             var expandedArgs = _pathResolver.ExpandPathVariables(g, action.Arguments) ?? string.Empty;
-            sc.LaunchOptions = EmulatorPathUtils.QuoteArgumentsIfNeeded(expandedArgs);
+            var combined = string.IsNullOrEmpty(extraArgs) ? expandedArgs
+                : string.IsNullOrEmpty(expandedArgs) ? extraArgs
+                : extraArgs + " " + expandedArgs;
+            sc.LaunchOptions = EmulatorPathUtils.QuoteArgumentsIfNeeded(combined);
         }
 
         try
@@ -1127,7 +1215,7 @@ internal class ImportExportService
                 _library.EnsureFileActionForExternalGame(g, exePath, workDir, fileArgs);
             }
             
-            if (_library.Settings.LaunchViaSteam && appId != 0) { _library.EnsureSteamPlayActionForExternalGame(g, appId, workDir); }
+            if (_library.Settings.LaunchViaSteam && appId != 0) { _library.EnsureSteamPlayActionForExternalGame(g, appId, workDir, _library.Settings.SteamActionIsDefault); }
         }
         catch (Exception ex)
         {
