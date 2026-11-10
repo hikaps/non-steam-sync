@@ -72,10 +72,23 @@ internal class WriteBackHandler : IDisposable
             _hasPendingUpdates = true;
             
             // Thread-safe timer replacement - dispose old timer and create new one atomically
-            var newTimer = new Timer(_ => ProcessPendingGameUpdates(), null, UpdateDebounceMs, Timeout.Infinite);
+            var newTimer = new Timer(_ => RunOnUiThread(ProcessPendingGameUpdates), null, UpdateDebounceMs, Timeout.Infinite);
             var oldTimer = Interlocked.Exchange(ref _updateDebounceTimer, newTimer);
             oldTimer?.Dispose();
         }
+    }
+
+    // Serializes shortcuts.vdf access with manual export and auto-sync, which run on the UI thread.
+    private void RunOnUiThread(Action action)
+    {
+        var dispatcher = _playniteApi?.MainView?.UIDispatcher;
+        if (dispatcher == null)
+        {
+            action();
+            return;
+        }
+
+        dispatcher.BeginInvoke(action);
     }
     
     private void ProcessPendingGameUpdates()

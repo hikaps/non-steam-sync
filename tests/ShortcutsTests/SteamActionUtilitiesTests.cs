@@ -411,4 +411,58 @@ public class SteamActionUtilitiesTests
         Assert.True(changed);
         Assert.True(steamAction.IsPlayAction);
     }
+
+    [Fact]
+    public void RemoveSteamLaunchAction_RemovesMatchingUrlAction()
+    {
+        var url = $"{Constants.SteamRungameIdUrl}123";
+        var file = new GameAction { Name = "Play", Type = GameActionType.File, Path = "g.exe" };
+        var steam = new GameAction { Name = Constants.PlaySteamActionName, Type = GameActionType.URL, Path = url };
+
+        var changed = GameActionUtilities.RemoveSteamLaunchAction(new List<GameAction> { file, steam }, url, out var updated);
+
+        Assert.True(changed);
+        Assert.Single(updated);
+        Assert.Same(file, updated[0]);
+    }
+
+    [Fact]
+    public void RemoveSteamLaunchAction_PromotesDirectActionWhenSteamWasDefault()
+    {
+        var url = $"{Constants.SteamRungameIdUrl}123";
+        var other = new GameAction { Name = "Other", Type = GameActionType.File, Path = "o.exe" };
+        var direct = new GameAction { Name = Constants.PlayDirectActionName, Type = GameActionType.File, Path = "g.exe" };
+        var steam = new GameAction { Name = Constants.PlaySteamActionName, Type = GameActionType.URL, Path = url, IsPlayAction = true };
+
+        GameActionUtilities.RemoveSteamLaunchAction(new List<GameAction> { other, direct, steam }, url, out _);
+
+        Assert.True(direct.IsPlayAction);
+        Assert.False(other.IsPlayAction);
+    }
+
+    [Fact]
+    public void RemoveSteamLaunchAction_NoMatch_ReturnsFalseAndKeepsActions()
+    {
+        var file = new GameAction { Name = "Play", Type = GameActionType.File, Path = "g.exe", IsPlayAction = true };
+
+        var changed = GameActionUtilities.RemoveSteamLaunchAction(new List<GameAction> { file }, $"{Constants.SteamRungameIdUrl}9", out var updated);
+
+        Assert.False(changed);
+        Assert.Single(updated);
+        Assert.True(file.IsPlayAction);
+    }
+
+    [Fact]
+    public void RemoveSteamLaunchAction_PromotesFirstFileActionWhenNoDirectAction()
+    {
+        var url = $"{Constants.SteamRungameIdUrl}123";
+        var other = new GameAction { Name = "Other", Type = GameActionType.File, Path = "o.exe" };
+        var steam = new GameAction { Name = Constants.PlaySteamActionName, Type = GameActionType.URL, Path = url, IsPlayAction = true };
+
+        var changed = GameActionUtilities.RemoveSteamLaunchAction(new List<GameAction> { other, steam }, url, out var updated);
+
+        Assert.True(changed);
+        Assert.Single(updated);
+        Assert.True(other.IsPlayAction);
+    }
 }
