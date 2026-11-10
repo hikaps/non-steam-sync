@@ -452,6 +452,174 @@ internal class ImportExportService
         SteamProcessHelper.TryLaunchSteam(_library.Settings.SteamRootPath);
     }
 
+    /// <summary>
+    /// True when an installed game should be auto-exported: visible, not already exported, and not
+    /// itself a Steam game or a shortcut imported by this plugin.
+    /// </summary>
+    internal static bool IsAutoSyncCandidate(Game g, Guid ownPluginId, Dictionary<string, uint> byPlayniteId)
+    {
+        return g.IsInstalled
+            && !g.Hidden
+            && g.PluginId != ownPluginId
+            && g.PluginId != Guid.Parse(Constants.SteamLibraryPluginId)
+            && !byPlayniteId.ContainsKey(g.Id.ToString());
+    }
+
+    /// <summary>
+    /// Returns the ExportMap keys (AppId strings) whose shortcut auto-sync should remove: the game was
+    /// deleted from Playnite, or it was uninstalled and auto-sync previously saw it installed.
+    /// </summary>
+    internal static List<string> FindExportKeysToRemove(IReadOnlyDictionary<string, string> exportMap, ICollection<string> managedKeys, Func<Guid, Game?> getGame, Guid ownPluginId)
+    {
+        var keys = new List<string>();
+        foreach (var kv in exportMap)
+        {
+            if (!Guid.TryParse(kv.Value, out var gameId))
+            {
+                continue;
+            }
+
+            var game = getGame(gameId);
+            if (game == null)
+            {
+                keys.Add(kv.Key);
+            }
+            else if (game.PluginId != ownPluginId && !game.IsInstalled && managedKeys.Contains(kv.Key))
+            {
+                keys.Add(kv.Key);
+            }
+        }
+
+        return keys;
+    }
+
+    /// <summary>
+    /// Reconciles shortcuts.vdf with the Playnite library without showing any dialog.
+    /// Adds shortcuts for installed games, removes shortcuts for uninstalled/deleted games,
+    /// and reports games it could not handle through a notification.
+    /// </summary>
+    public void RunAutoSync()
+    {
+        try
+        {
+            var settings = _library.Settings;
+            if (!settings.AutoSyncEnabled)
+            {
+                return;
+            }
+
+            var vdfPath = _pathResolver.ResolveShortcutsVdfPathForUser(settings.SelectedSteamUserId);
+            if (string.IsNullOrWhiteSpace(vdfPath))
+            {
+                Logger.Warn("Auto-sync skipped: Steam path not configured.");
+                return;
+            }
+
+            var db = _library.PlayniteApi.Database;
+            var result = new ExportResult();
+            var shortcuts = File.Exists(vdfPath) ? ShortcutsFile.Read(vdfPath!).ToList() : new List<SteamShortcut>();
+            var existing = shortcuts.GroupBy(s => s.AppId).ToDictionary(g => g.Key, g => g.First());
+            var gridDir = _artworkManager.TryGetGridDirFromVdf(vdfPath!);
+
+            // Removal
+            var pendingCleanup = new List<(string Key, uint AppId, Game? Game)>();
+            var removeKeys = FindExportKeysToRemove(settings.ExportMap, settings.AutoSyncManagedAppIds, id => db.Games.Get(id), _library.Id);
+            foreach (var key in removeKeys)
+            {
+                if (!uint.TryParse(key, out var removedAppId))
+                {
+                    continue;
+                }
+
+                if (shortcuts.RemoveAll(s => s.AppId == removedAppId) > 0)
+                {
+                    result.Removed++;
+                }
+                existing.Remove(removedAppId);
+
+                Game? game = null;
+                if (Guid.TryParse(settings.ExportMap[key], out var gameId))
+                {
+                    game = db.Games.Get(gameId);
+                }
+
+                pendingCleanup.Add((key, removedAppId, game));
+            }
+
+            // Export
+            var byPlayniteId = BuildPlayniteIdLookup();
+            var candidates = db.Games.Where(g => IsAutoSyncCandidate(g, _library.Id, byPlayniteId)).ToList();
+            ExportGames(candidates, shortcuts, existing, byPlayniteId, vdfPath!, new ExportContext { Unattended = true }, result);
+
+            // Mark exported, installed games as managed so they are removed when uninstalled
+            foreach (var kv in settings.ExportMap)
+            {
+                if (Guid.TryParse(kv.Value, out var gameId)
+                    && db.Games.Get(gameId) is Game mapped
+                    && mapped.IsInstalled
+                    && mapped.PluginId != _library.Id
+                    && !settings.AutoSyncManagedAppIds.Contains(kv.Key))
+                {
+                    settings.AutoSyncManagedAppIds.Add(kv.Key);
+                }
+            }
+
+            var changed = result.Added + result.Removed > 0;
+            if (changed)
+            {
+                WriteShortcutsWithBackup(vdfPath!, shortcuts);
+            }
+
+            // Only drop artwork, mappings and the Steam play action once the vdf no longer lists the shortcuts,
+            // so a failed write leaves them intact for the next run.
+            foreach (var (key, removedAppId, game) in pendingCleanup)
+            {
+                ArtworkManager.DeleteGridArtwork(gridDir, removedAppId);
+                settings.ExportMap.Remove(key);
+                settings.AutoSyncManagedAppIds.Remove(key);
+
+                if (game != null)
+                {
+                    var url = $"{Constants.SteamRungameIdUrl}{Utils.ToShortcutGameId(removedAppId)}";
+                    if (GameActionUtilities.RemoveSteamLaunchAction(game.GameActions, url, out var updatedActions))
+                    {
+                        game.GameActions = new ObservableCollection<GameAction>(updatedActions);
+                        db.Games.Update(game);
+                    }
+                }
+            }
+
+            var currentSkips = result.SkippedGameIds.Select(id => id.ToString()).ToList();
+            var notifySkips = currentSkips.Any(id => !settings.AutoSyncNotifiedSkips.Contains(id));
+            settings.AutoSyncNotifiedSkips = currentSkips;
+            _library.SavePluginSettings(settings);
+
+            var notifications = _library.PlayniteApi.Notifications;
+            if (changed && SteamProcessHelper.IsSteamRunning())
+            {
+                notifications.Add(new NotificationMessage(
+                    Constants.AutoSyncRestartNotificationId,
+                    string.Format(Constants.AutoSyncRestartMessage, result.Added, result.Removed),
+                    NotificationType.Info));
+            }
+
+            if (notifySkips)
+            {
+                notifications.Add(new NotificationMessage(
+                    Constants.AutoSyncSkippedNotificationId,
+                    string.Format(Constants.AutoSyncSkippedMessage, result.Skipped),
+                    NotificationType.Info,
+                    () => ShowAddToSteamDialog()));
+            }
+
+            Logger.Info($"Auto-sync: added {result.Added}, removed {result.Removed}, skipped {result.Skipped}.");
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex, "Auto-sync failed.");
+        }
+    }
+
     private ExportResult AddGamesToSteamCore(IEnumerable<Game> games)
     {
         var vdfPath = _pathResolver.ResolveShortcutsVdfPathForUser(_library.Settings.SelectedSteamUserId);
@@ -477,38 +645,59 @@ internal class ImportExportService
         var byPlayniteId = BuildPlayniteIdLookup();
 
         var context = new ExportContext { SkipAllRemaining = false };
+        var result = new ExportResult { WasSteamRunning = wasSteamRunning };
 
-        int added = 0, updated = 0, skipped = 0;
-        var skippedGames = new List<string>();
+        ExportGames(games, shortcuts, existing, byPlayniteId, vdfPath!, context, result);
+
+        WriteShortcutsWithBackup(vdfPath!, shortcuts);
+        return result;
+    }
+
+    private void ExportGames(IEnumerable<Game> games, List<SteamShortcut> shortcuts, Dictionary<uint, SteamShortcut> existing,
+        Dictionary<string, uint> byPlayniteId, string vdfPath, ExportContext context, ExportResult result)
+    {
+        int added = 0, updated = 0;
+
+        void Skip(Game g, string reason)
+        {
+            result.Skipped++;
+            result.SkippedGames.Add($"{g.Name}: {reason}");
+            result.SkippedGameIds.Add(g.Id);
+        }
 
         foreach (var g in games)
         {
-            var (exePath, workDir, name, action, result) = GetGameActionDetailsWithFallback(g, existing, byPlayniteId, context);
-            
-            if (result == ExeDiscoveryResult.UserSkippedAll)
+            var (exePath, workDir, name, action, discovery) = GetGameActionDetailsWithFallback(g, existing, byPlayniteId, context);
+
+            if (discovery == ExeDiscoveryResult.UserSkippedAll)
             {
                 // User chose "Skip All" - skip remaining games silently
-                skipped++;
-                skippedGames.Add($"{g.Name}: {Constants.SkipReasonUserSkipped}");
+                Skip(g, Constants.SkipReasonUserSkipped);
                 continue;
             }
-            
-            if (action == null || result != ExeDiscoveryResult.Success)
+
+            if (action == null || discovery != ExeDiscoveryResult.Success)
             {
-                skipped++;
-                var reason = GetSkipReason(g, result);
-                skippedGames.Add($"{g.Name}: {reason}");
+                var reason = GetSkipReason(g, discovery);
+                Skip(g, reason);
                 Logger.Debug($"Skipping '{g.Name}': {reason}");
                 continue;
             }
 
-            var appId = CreateOrUpdateShortcut(g, exePath, workDir, name, action, shortcuts, existing, byPlayniteId, ref added, ref updated);
-            UpdateShortcutArtwork(g, appId, vdfPath!);
+            var appId = CreateOrUpdateShortcut(g, exePath, workDir, name, action, shortcuts, existing, byPlayniteId, ref added, ref updated, context);
+            if (appId == 0)
+            {
+                Skip(g, Constants.SkipReasonNameMatch);
+                Logger.Debug($"Skipping '{g.Name}': {Constants.SkipReasonNameMatch}");
+                continue;
+            }
+
+            UpdateShortcutArtwork(g, appId, vdfPath);
             UpdateGameActions(g, appId, exePath, workDir, action);
         }
 
-        WriteShortcutsWithBackup(vdfPath!, shortcuts);
-        return new ExportResult { Added = added, Updated = updated, Skipped = skipped, SkippedGames = skippedGames, WasSteamRunning = wasSteamRunning };
+        result.Added += added;
+        result.Updated += updated;
     }
 
     private static string GetSkipReason(Game g, ExeDiscoveryResult result)
@@ -587,6 +776,11 @@ internal class ImportExportService
             }
 
             // Automatic discovery failed - show browse dialog
+            if (context.Unattended)
+            {
+                return (string.Empty, null, string.Empty, null, ExeDiscoveryResult.NoAction);
+            }
+
             var (selectedExe, userResult) = ShowBrowseForExeDialog(g, context);
             if (userResult == ExeDiscoveryResult.UserSkippedAll)
             {
@@ -1105,7 +1299,11 @@ internal class ImportExportService
         }
     }
 
-    private uint CreateOrUpdateShortcut(Game g, string exePath, string? workDir, string name, GameAction action, List<SteamShortcut> shortcuts, Dictionary<uint, SteamShortcut> existing, Dictionary<string, uint> byPlayniteId, ref int added, ref int updated)
+    /// <summary>
+    /// Creates or updates the shortcut for a game. Returns 0 when an unattended run skipped the game
+    /// because it matches an existing Steam shortcut by name; real AppIds are never 0.
+    /// </summary>
+    private uint CreateOrUpdateShortcut(Game g, string exePath, string? workDir, string name, GameAction action, List<SteamShortcut> shortcuts, Dictionary<uint, SteamShortcut> existing, Dictionary<string, uint> byPlayniteId, ref int added, ref int updated, ExportContext context)
     {
         uint resolvedExistingAppId = 0;
         if (byPlayniteId.TryGetValue(g.Id.ToString(), out var mappedAppId) && mappedAppId != 0)
@@ -1123,7 +1321,17 @@ internal class ImportExportService
 
         if (resolvedExistingAppId == 0)
         {
-            resolvedExistingAppId = ResolveExistingByName(name, existing, byPlayniteId);
+            if (context.Unattended)
+            {
+                if (FindNameMatches(name, existing, byPlayniteId).Count > 0)
+                {
+                    return 0;
+                }
+            }
+            else
+            {
+                resolvedExistingAppId = ResolveExistingByName(name, existing, byPlayniteId);
+            }
         }
 
         // Split quoted exe path from trailing arguments (e.g. '"C:\Game\game.exe" -arg').
@@ -1253,6 +1461,8 @@ internal class ImportExportService
         public int Updated; 
         public int Skipped;
         public List<string> SkippedGames = new List<string>();
+        public List<Guid> SkippedGameIds = new List<Guid>();
+        public int Removed;
         public bool WasSteamRunning;
     }
 

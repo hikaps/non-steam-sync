@@ -13,14 +13,22 @@ public class PluginSettings : ISettings
 {
     private readonly LibraryPlugin? _plugin;
     private bool _originalSteamActionIsDefault;
+    private bool _originalAutoSyncEnabled;
 
     public string SteamRootPath { get; set; } = string.Empty;
     public bool LaunchViaSteam { get; set; } = true;
+    public bool AutoSyncEnabled { get; set; } = false;
+    public List<string> AutoSyncManagedAppIds { get; set; } = new List<string>();
+    public List<string> AutoSyncNotifiedSkips { get; set; } = new List<string>();
     public bool SteamActionIsDefault { get; set; } = true;
     public string? SelectedSteamUserId { get; set; } = null;
     public Dictionary<string, string> ExportMap { get; set; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-    public void BeginEdit() { _originalSteamActionIsDefault = SteamActionIsDefault; }
+    public void BeginEdit()
+    {
+        _originalSteamActionIsDefault = SteamActionIsDefault;
+        _originalAutoSyncEnabled = AutoSyncEnabled;
+    }
     public void CancelEdit() { }
     public void EndEdit()
     {
@@ -36,6 +44,17 @@ public class PluginSettings : ISettings
                 catch (Exception ex)
                 {
                     LogManager.GetLogger().Error(ex, "Failed to reapply play actions after SteamActionIsDefault change.");
+                }
+            }
+            if (AutoSyncEnabled && !_originalAutoSyncEnabled)
+            {
+                try
+                {
+                    ShortcutsLibrary.QueueAutoSyncFromSettings();
+                }
+                catch (Exception ex)
+                {
+                    LogManager.GetLogger().Error(ex, "Failed to queue auto-sync after enabling it.");
                 }
             }
         }
@@ -66,6 +85,9 @@ public class PluginSettings : ISettings
                 SteamActionIsDefault = saved.SteamActionIsDefault;
                 SelectedSteamUserId = saved.SelectedSteamUserId;
                 ExportMap = saved.ExportMap ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                AutoSyncEnabled = saved.AutoSyncEnabled;
+                AutoSyncManagedAppIds = saved.AutoSyncManagedAppIds ?? new List<string>();
+                AutoSyncNotifiedSkips = saved.AutoSyncNotifiedSkips ?? new List<string>();
             }
             else
             {
@@ -74,6 +96,9 @@ public class PluginSettings : ISettings
                 SteamActionIsDefault = true;
                 SelectedSteamUserId = null;
                 ExportMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                AutoSyncEnabled = false;
+                AutoSyncManagedAppIds = new List<string>();
+                AutoSyncNotifiedSkips = new List<string>();
             }
         }
         catch (Exception ex)
@@ -84,6 +109,9 @@ public class PluginSettings : ISettings
             SteamActionIsDefault = true;
             SelectedSteamUserId = null;
             ExportMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            AutoSyncEnabled = false;
+            AutoSyncManagedAppIds = new List<string>();
+            AutoSyncNotifiedSkips = new List<string>();
         }
     }
 

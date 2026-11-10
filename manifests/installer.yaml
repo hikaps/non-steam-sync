@@ -1,5 +1,13 @@
 AddonId: f15771cd-b6d7-4a3d-9b8e-08786a13d9c7
 Packages:
+  - Version: 0.9.0
+    RequiredApiVersion: 6.0.0
+    ReleaseDate: 2026-11-09
+    PackageUrl: https://github.com/hikaps/non-steam-sync/releases/download/v0.9.0/SteamShortcutsImporter-v0.9.0.pext
+    Changelog:
+      - Add opt-in auto-sync of installed games on startup and when games are installed or uninstalled (removes shortcuts for uninstalled or deleted games)
+      - Auto-sync never shows dialogs; skipped games are reported in a notification and Steam is never closed
+      - Write-back to shortcuts.vdf now runs on the UI thread to avoid races
   - Version: 0.8.0
     RequiredApiVersion: 6.0.0
     ReleaseDate: 2026-11-05
